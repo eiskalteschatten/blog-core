@@ -241,6 +241,33 @@ For example, if `posts/hello-world/hero.jpg` is processed at widths `[800, 1200]
 
 Return an empty array from `getImageSizes()` to disable image processing entirely.
 
+### Publish core assets (also runs automatically as part of `build-index`)
+
+Creates a symlink at `getPublicAssetsDir()` (default: `public/blog-core/`) pointing to the package's bundled `assets/` directory. If the symlink already exists and is correct it is left untouched.
+
+```bash
+# via Composer script (standalone)
+composer publish-assets
+
+# directly
+php bin/publish_assets.php
+
+# with verbose output
+php bin/publish_assets.php --verbose
+php bin/publish_assets.php -v
+```
+
+Override `getPublicAssetsDir()` in your `Config` to change the symlink location:
+
+```php
+public function getPublicAssetsDir(): string
+{
+    return $this->getPublicDir() . '/blog-core'; // default
+}
+```
+
+Bundled assets are then accessible under `/blog-core/` in the browser, e.g. `/blog-core/js/blog.js`.
+
 ### Start the development server
 
 ```bash
