@@ -12,8 +12,10 @@ use BlogCore\Models\Post;
 use BlogCore\Models\PostCategoryMapper;
 use BlogCore\Models\PostTagMapper;
 use BlogCore\Models\Tag;
+use BlogCore\Helpers\SitemapHelper;
 use BlogCore\Parsers\CategoryParser;
 use BlogCore\Parsers\PostParser;
+use RuntimeException;
 
 class IndexBuilder
 {
@@ -36,6 +38,7 @@ class IndexBuilder
 
         $this->indexCategories($verbose);
         $this->indexPosts($verbose);
+        $this->writeSitemap($verbose);
 
         $this->log($verbose, "Index complete.");
     }
@@ -89,6 +92,24 @@ class IndexBuilder
             $draft = $data['is_draft'] ? ' [draft]' : '';
             $this->log($verbose, "  Post: {$data['title']} ({$data['slug']}){$draft}");
         }
+    }
+
+    private function writeSitemap(bool $verbose): void
+    {
+        $publicDir = rtrim($this->config->getPublicDir(), '/');
+
+        if (!is_dir($publicDir)) {
+            throw new RuntimeException("Public directory not found: {$publicDir}");
+        }
+
+        $path = $publicDir . '/sitemap.xml';
+        $xml  = SitemapHelper::generate($this->config);
+
+        if (file_put_contents($path, $xml) === false) {
+            throw new RuntimeException("Could not write sitemap to: {$path}");
+        }
+
+        $this->log($verbose, "Sitemap written to {$path}");
     }
 
     private function log(bool $verbose, string $message): void

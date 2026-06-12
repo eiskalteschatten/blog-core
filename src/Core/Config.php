@@ -57,6 +57,12 @@ abstract class Config
     }
 
     /**
+     * Absolute path to the publicly served directory (e.g. /var/www/myapp/public).
+     * The build command writes sitemap.xml here so it is served as a static file.
+     */
+    abstract public function getPublicDir(): string;
+
+    /**
      * Static pages to include in the sitemap.
      * Return an array of ['loc' => '/about', 'changefreq' => 'monthly', 'priority' => '0.5'].
      */

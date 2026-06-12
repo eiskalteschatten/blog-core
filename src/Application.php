@@ -192,10 +192,5 @@ class Application
 
             $renderer->xml(FeedHelper::generate($posts, $config));
         });
-
-        // Sitemap
-        $router->add('GET', $prefix . '/sitemap.xml', function () use ($renderer, $config): void {
-            $renderer->xml(SitemapHelper::generate($config));
-        });
     }
 }
