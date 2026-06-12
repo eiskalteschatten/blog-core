@@ -60,6 +60,10 @@ class BlogConfig extends Config
             ['loc' => '/about', 'changefreq' => 'monthly', 'priority' => '0.5'],
         ];
     }
+
+    // Image sizes to generate (widths in px). Override to customise.
+    // Return [] to disable image processing.
+    public function getImageSizes(): array { return [800, 1200]; }
 }
 ```
 
@@ -190,7 +194,7 @@ categories/
 
 ### Build (or rebuild) the index
 
-Scans the `posts/` and `categories/` directories, converts Markdown to HTML, upserts everything into the SQLite database, and writes `sitemap.xml` to `getPublicDir()`. Safe to run repeatedly.
+Scans the `posts/` and `categories/` directories, converts Markdown to HTML, upserts everything into the SQLite database, writes `feed.xml` and `sitemap.xml` to `getPublicDir()`, then processes post images. Safe to run repeatedly.
 
 ```bash
 # via Composer script
@@ -203,6 +207,39 @@ php bin/build_index.php
 php bin/build_index.php --verbose
 php bin/build_index.php -v
 ```
+
+### Process post images (also runs automatically as part of `build-index`)
+
+Scans each post directory for images (jpg, jpeg, png, gif, webp, avif, tiff), resizes them to the widths defined in `Config::getImageSizes()`, converts to WebP, and writes them to `public/images/posts/{slug}/{filename}-{width}.webp`.
+
+Already up-to-date outputs (output mtime ≥ source mtime) are skipped. Requires the [`imagick` PHP extension](https://pecl.php.net/package/imagick) (`ext-imagick`); if not loaded, a warning is printed and the step is skipped without failing the build.
+
+```bash
+# via Composer script (standalone)
+composer process-images
+
+# directly
+php bin/process_images.php
+
+# with verbose output
+php bin/process_images.php --verbose
+php bin/process_images.php -v
+```
+
+To reference a processed image in a post template, the path pattern is:
+
+```
+/images/posts/{slug}/{original-filename}-{width}.webp
+```
+
+For example, if `posts/hello-world/hero.jpg` is processed at widths `[800, 1200]`:
+
+```
+/images/posts/hello-world/hero-800.webp
+/images/posts/hello-world/hero-1200.webp
+```
+
+Return an empty array from `getImageSizes()` to disable image processing entirely.
 
 ### Start the development server
 

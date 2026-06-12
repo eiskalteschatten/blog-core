@@ -63,6 +63,17 @@ abstract class Config
     abstract public function getPublicDir(): string;
 
     /**
+     * Image widths (in pixels) to generate when processing post images.
+     * Each source image is converted to WebP and resized to every listed width
+     * (images are never enlarged). Output goes to public/images/posts/{slug}/.
+     * Return an empty array to disable image processing entirely.
+     */
+    public function getImageSizes(): array
+    {
+        return [800, 1200];
+    }
+
+    /**
      * Static pages to include in the sitemap.
      * Return an array of ['loc' => '/about', 'changefreq' => 'monthly', 'priority' => '0.5'].
      */

@@ -12,6 +12,7 @@ use BlogCore\Models\Post;
 use BlogCore\Models\PostCategoryMapper;
 use BlogCore\Models\PostTagMapper;
 use BlogCore\Models\Tag;
+use BlogCore\Commands\ProcessImagesCommand;
 use BlogCore\Helpers\FeedHelper;
 use BlogCore\Helpers\SitemapHelper;
 use BlogCore\Parsers\CategoryParser;
@@ -41,6 +42,7 @@ class IndexBuilder
         $this->indexPosts($verbose);
         $this->writeFeed($verbose);
         $this->writeSitemap($verbose);
+        $this->processImages($verbose);
 
         $this->log($verbose, "Index complete.");
     }
@@ -94,6 +96,19 @@ class IndexBuilder
             $draft = $data['is_draft'] ? ' [draft]' : '';
             $this->log($verbose, "  Post: {$data['title']} ({$data['slug']}){$draft}");
         }
+    }
+
+    private function processImages(bool $verbose): void
+    {
+        $sizes = $this->config->getImageSizes();
+
+        if (empty($sizes)) {
+            $this->log($verbose, "Image processing disabled (getImageSizes() is empty).");
+            return;
+        }
+
+        $this->log($verbose, "Processing post images...");
+        ProcessImagesCommand::execute($this->config, $verbose);
     }
 
     private function writeFeed(bool $verbose): void
