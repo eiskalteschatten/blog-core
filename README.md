@@ -241,6 +241,45 @@ For example, if `posts/hello-world/hero.jpg` is processed at widths `[800, 1200]
 
 Return an empty array from `getImageSizes()` to disable image processing entirely.
 
+### Import from WordPress (one-time migration)
+
+Connects to the WordPress REST API (v2) and imports all posts and categories into the blog-core file structure.
+
+**What it does:**
+- Fetches all categories → writes one `categories/{slug}.json` per category
+- Batch-fetches all tags up-front (no per-post tag API calls)
+- Fetches all published and draft posts → writes `posts/{slug}/meta.json` + `posts/{slug}/post.md`
+- Downloads the featured image to both `posts/{slug}/` (for `process-images` WebP conversion) and `public/images/posts/{slug}/` (for immediate web access)
+- Downloads all inline images in post content to `public/images/posts/{slug}/` and rewrites `src` attributes
+- Strips WordPress-specific HTML cruft (block classes, poll blocks, `srcset`/`sizes`, etc.)
+- Skips already-imported posts and categories unless `--force` is passed
+
+```bash
+# via Composer script
+composer import-wordpress -- --url https://example.com
+
+# directly
+php bin/import_wordpress.php --url https://example.com
+
+# with verbose output
+php bin/import_wordpress.php --url https://example.com --verbose
+
+# import a single post by slug
+php bin/import_wordpress.php --url https://example.com --post my-post-slug
+
+# re-import (overwrite) already-imported content
+php bin/import_wordpress.php --url https://example.com --force
+```
+
+**After importing**, run `build-index` to populate the SQLite database and `process-images` to generate WebP versions of the featured images:
+
+```bash
+composer build-index
+composer process-images
+```
+
+Requires `ext-curl` (available in most PHP installations).
+
 ### Publish core assets (also runs automatically as part of `build-index`)
 
 Creates a symlink at `getPublicAssetsDir()` (default: `public/blog-core/`) pointing to the package's bundled `assets/` directory. If the symlink already exists and is correct it is left untouched.
