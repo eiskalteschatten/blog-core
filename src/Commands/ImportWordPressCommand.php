@@ -180,8 +180,7 @@ class ImportWordPressCommand
         bool    $force,
         bool    $verbose
     ): void {
-        $postsDir  = rtrim($config->getPostsDir(), '/');
-        $publicDir = rtrim($config->getPublicDir(), '/');
+        $postsDir = rtrim($config->getPostsDir(), '/');
 
         // Request only the fields we need
         $fields   = 'id,slug,title,excerpt,content,status,categories,tags,featured_media,date,modified';
@@ -199,7 +198,7 @@ class ImportWordPressCommand
         }
 
         foreach ($wpPosts as $post) {
-            self::importPost($post, $apiBase, $config, $postsDir, $publicDir, $tagMap, $categoryMap, $force, $verbose);
+            self::importPost($post, $apiBase, $config, $postsDir, $tagMap, $categoryMap, $force, $verbose);
         }
     }
 
@@ -208,7 +207,6 @@ class ImportWordPressCommand
         string $apiBase,
         Config $config,
         string $postsDir,
-        string $publicDir,
         array  $tagMap,
         array  $categoryMap,
         bool   $force,
@@ -244,20 +242,20 @@ class ImportWordPressCommand
             array_map(fn($id) => $categoryMap[(int)$id] ?? null, (array)($post['categories'] ?? []))
         ));
 
-        // Featured image — downloaded to posts/{slug}/ for process-images
-        // AND to public/images/posts/{slug}/ for immediate web access
+        // Featured image — downloaded to posts/{slug}/ so process-images can generate WebP versions
         $featuredImagePath = null;
         $featuredMediaId   = (int)($post['featured_media'] ?? 0);
 
         if ($featuredMediaId > 0) {
             $featuredImagePath = self::importFeaturedImage(
-                $apiBase, $featuredMediaId, $slug, $postDir, $publicDir, $verbose
+                $apiBase, $featuredMediaId, $slug, $postDir, $verbose
             );
         }
 
-        // Content HTML — clean WordPress markup, download inline images
+        // Content HTML — clean WordPress markup, download inline images to posts/{slug}/
+        // and rewrite their srcs to /images/posts/{slug}/{basename}
         $html = self::cleanHtml($post['content']['rendered'] ?? '');
-        $html = self::importInlineImages($html, $slug, $publicDir, $verbose);
+        $html = self::downloadInlineImages($html, $slug, $postDir, $verbose);
 
         // Write meta.json
         $meta = [
@@ -289,16 +287,15 @@ class ImportWordPressCommand
     }
 
     /**
-     * Fetch the featured image for a post, download it to both the post source
-     * directory (for process-images) and the public directory (for immediate
-     * web access), and return the public URL path.
+     * Fetch the featured image for a post and download it to the post source
+     * directory (posts/{slug}/) so process-images can generate WebP versions.
+     * Returns the expected public URL path that process-images will serve.
      */
     private static function importFeaturedImage(
         string $apiBase,
         int    $mediaId,
         string $slug,
         string $postDir,
-        string $publicDir,
         bool   $verbose
     ): ?string {
         try {
@@ -310,20 +307,60 @@ class ImportWordPressCommand
                 return null;
             }
 
-            $basename     = basename(parse_url($srcUrl, PHP_URL_PATH));
-            $publicImgDir = $publicDir . '/images/posts/' . $slug;
+            $basename = basename(parse_url($srcUrl, PHP_URL_PATH));
 
-            // Download to posts/{slug}/ so process-images can generate WebP versions
             self::downloadFile($srcUrl, $postDir . '/' . $basename, $verbose);
-
-            // Download to public/images/posts/{slug}/ for immediate access
-            self::downloadFile($srcUrl, $publicImgDir . '/' . $basename, $verbose);
 
             return '/images/posts/' . $slug . '/' . $basename;
         } catch (\Throwable $e) {
             fwrite(STDERR, "  [warn] Could not fetch featured image for '{$slug}': {$e->getMessage()}\n");
             return null;
         }
+    }
+
+    /**
+     * Find all <img> tags in the HTML, download each image to posts/{slug}/
+     * (where process-images will pick it up), and rewrite the src to
+     * /images/posts/{slug}/{basename} (where process-images will publish it).
+     */
+    private static function downloadInlineImages(
+        string $html,
+        string $slug,
+        string $postDir,
+        bool   $verbose
+    ): string {
+        if (trim($html) === '' || !str_contains($html, '<img')) {
+            return $html;
+        }
+
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        @$dom->loadHTML(
+            '<html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>',
+            LIBXML_NOERROR | LIBXML_NOWARNING
+        );
+
+        foreach ($dom->getElementsByTagName('img') as $img) {
+            $src = $img->getAttribute('src');
+
+            if (!$src || !filter_var($src, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $basename = basename(parse_url($src, PHP_URL_PATH));
+
+            if (self::downloadFile($src, $postDir . '/' . $basename, $verbose)) {
+                $img->setAttribute('src', '/images/posts/' . $slug . '/' . $basename);
+            }
+        }
+
+        $body   = $dom->getElementsByTagName('body')->item(0);
+        $output = '';
+
+        foreach ($body->childNodes as $child) {
+            $output .= $dom->saveHTML($child);
+        }
+
+        return trim($output);
     }
 
     // -------------------------------------------------------------------------
@@ -385,57 +422,6 @@ class ImportWordPressCommand
         }
 
         // Serialize body contents only
-        $body   = $dom->getElementsByTagName('body')->item(0);
-        $output = '';
-
-        foreach ($body->childNodes as $child) {
-            $output .= $dom->saveHTML($child);
-        }
-
-        return trim($output);
-    }
-
-    /**
-     * Find all <img> tags in the HTML, download each image to
-     * public/images/posts/{slug}/, and rewrite the src attribute.
-     */
-    private static function importInlineImages(
-        string $html,
-        string $slug,
-        string $publicDir,
-        bool   $verbose
-    ): string {
-        if (trim($html) === '' || !str_contains($html, '<img')) {
-            return $html;
-        }
-
-        $imgDir = $publicDir . '/images/posts/' . $slug;
-
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        @$dom->loadHTML(
-            '<html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>',
-            LIBXML_NOERROR | LIBXML_NOWARNING
-        );
-
-        foreach ($dom->getElementsByTagName('img') as $img) {
-            $src = $img->getAttribute('src');
-
-            if (!$src || !filter_var($src, FILTER_VALIDATE_URL)) {
-                continue;
-            }
-
-            $basename = basename(parse_url($src, PHP_URL_PATH));
-
-            if (!is_dir($imgDir) && !mkdir($imgDir, 0755, true)) {
-                fwrite(STDERR, "  [warn] Could not create directory: {$imgDir}\n");
-                continue;
-            }
-
-            if (self::downloadFile($src, $imgDir . '/' . $basename, $verbose)) {
-                $img->setAttribute('src', '/images/posts/' . $slug . '/' . $basename);
-            }
-        }
-
         $body   = $dom->getElementsByTagName('body')->item(0);
         $output = '';
 

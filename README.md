@@ -249,8 +249,8 @@ Connects to the WordPress REST API (v2) and imports all posts and categories int
 - Fetches all categories → writes one `categories/{slug}.json` per category
 - Batch-fetches all tags up-front (no per-post tag API calls)
 - Fetches all published and draft posts → writes `posts/{slug}/meta.json` + `posts/{slug}/post.md`
-- Downloads the featured image to both `posts/{slug}/` (for `process-images` WebP conversion) and `public/images/posts/{slug}/` (for immediate web access)
-- Downloads all inline images in post content to `public/images/posts/{slug}/` and rewrites `src` attributes
+- Downloads all images (featured and inline content) to `posts/{slug}/` so `process-images` can generate WebP versions
+- Inline image `src` attributes are rewritten to `/images/posts/{slug}/{basename}`
 - Strips WordPress-specific HTML cruft (block classes, poll blocks, `srcset`/`sizes`, etc.)
 - Skips already-imported posts and categories unless `--force` is passed
 
