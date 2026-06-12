@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+
+// Locate the Composer autoloader. CWD is the project root when run via Composer.
+foreach ([
+    getcwd() . '/vendor/autoload.php',           // via `composer build-index` or vendor/bin
+    dirname(__DIR__) . '/vendor/autoload.php',   // standalone (package root)
+    dirname(__DIR__, 3) . '/autoload.php',       // installed as a non-symlinked dependency
+] as $autoload) {
+    if (file_exists($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+BlogCore\Commands\BuildIndexCommand::main($argv);
