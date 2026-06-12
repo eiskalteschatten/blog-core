@@ -13,6 +13,7 @@ use BlogCore\Models\PostCategoryMapper;
 use BlogCore\Models\PostTagMapper;
 use BlogCore\Models\Tag;
 use BlogCore\Commands\ProcessImagesCommand;
+use BlogCore\Commands\PublishAssetsCommand;
 use BlogCore\Helpers\FeedHelper;
 use BlogCore\Helpers\SitemapHelper;
 use BlogCore\Parsers\CategoryParser;
@@ -43,6 +44,7 @@ class IndexBuilder
         $this->writeFeed($verbose);
         $this->writeSitemap($verbose);
         $this->processImages($verbose);
+        $this->publishAssets($verbose);
 
         $this->log($verbose, "Index complete.");
     }
@@ -96,6 +98,12 @@ class IndexBuilder
             $draft = $data['is_draft'] ? ' [draft]' : '';
             $this->log($verbose, "  Post: {$data['title']} ({$data['slug']}){$draft}");
         }
+    }
+
+    private function publishAssets(bool $verbose): void
+    {
+        $this->log($verbose, 'Publishing core assets...');
+        PublishAssetsCommand::execute($this->config, $verbose);
     }
 
     private function processImages(bool $verbose): void

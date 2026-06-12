@@ -5,8 +5,10 @@
     "license": "MIT",
     "require": {
         "php": ">=8.1",
-        "ext-imagick": "*",
         "erusev/parsedown": "^1.7"
+    },
+    "suggest": {
+        "ext-imagick": "Required for automatic post image resizing and WebP conversion."
     },
     "bin": ["bin/blog-core-build"],
     "autoload": {

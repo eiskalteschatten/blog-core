@@ -63,6 +63,15 @@ abstract class Config
     abstract public function getPublicDir(): string;
 
     /**
+     * Absolute path where blog-core's bundled assets are published.
+     * Defaults to {publicDir}/assets/blog-core/ — override to change the location.
+     */
+    public function getPublicAssetsDir(): string
+    {
+        return $this->getPublicDir() . '/blog-core';
+    }
+
+    /**
      * Image widths (in pixels) to generate when processing post images.
      * Each source image is converted to WebP and resized to every listed width
      * (images are never enlarged). Output goes to public/images/posts/{slug}/.
