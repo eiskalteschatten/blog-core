@@ -83,6 +83,16 @@ abstract class Config
     }
 
     /**
+     * The image width (in pixels) to use when rewriting <img> src paths in
+     * post content HTML after image processing. Must be one of the widths
+     * returned by getImageSizes(). Return null to disable content image rewriting.
+     */
+    public function getContentImageWidth(): ?int
+    {
+        return null;
+    }
+
+    /**
      * Static pages to include in the sitemap.
      * Return an array of ['loc' => '/about', 'changefreq' => 'monthly', 'priority' => '0.5'].
      */

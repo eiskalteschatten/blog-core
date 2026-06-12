@@ -44,6 +44,7 @@ class IndexBuilder
         $this->writeFeed($verbose);
         $this->writeSitemap($verbose);
         $this->processImages($verbose);
+        $this->rewriteContentImagePaths($verbose);
         $this->publishAssets($verbose);
 
         $this->log($verbose, "Index complete.");
@@ -117,6 +118,82 @@ class IndexBuilder
 
         $this->log($verbose, "Processing post images...");
         ProcessImagesCommand::execute($this->config, $verbose);
+    }
+
+    private function rewriteContentImagePaths(bool $verbose): void
+    {
+        $width = $this->config->getContentImageWidth();
+
+        if ($width === null) {
+            return;
+        }
+
+        $publicDir  = rtrim($this->config->getPublicDir(), '/');
+        $outputBase = $publicDir . '/images/posts';
+
+        $db    = Database::getConnection();
+        $posts = $db->query('SELECT id, slug, content_html FROM posts')->fetchAll(\PDO::FETCH_ASSOC);
+
+        $rewritten = 0;
+
+        foreach ($posts as $post) {
+            $html = $post['content_html'];
+
+            if (empty($html)) {
+                continue;
+            }
+
+            $slug = $post['slug'];
+
+            $doc = new \DOMDocument();
+            // Suppress warnings from malformed HTML; use encoding hint so multibyte text is preserved
+            @$doc->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+            $imgs    = $doc->getElementsByTagName('img');
+            $changed = false;
+
+            foreach ($imgs as $img) {
+                $src = $img->getAttribute('src');
+
+                // Skip external URLs and empty values
+                if (
+                    $src === '' ||
+                    str_starts_with($src, 'http://') ||
+                    str_starts_with($src, 'https://') ||
+                    str_starts_with($src, '//')
+                ) {
+                    continue;
+                }
+
+                $stem       = pathinfo(basename($src), PATHINFO_FILENAME);
+                $publicPath = '/images/posts/' . $slug . '/' . $stem . '-' . $width . '.webp';
+                $fsPath     = $outputBase . '/' . $slug . '/' . $stem . '-' . $width . '.webp';
+
+                if (!file_exists($fsPath)) {
+                    continue;
+                }
+
+                $img->setAttribute('src', $publicPath);
+                $changed = true;
+            }
+
+            if (!$changed) {
+                continue;
+            }
+
+            // Serialize only the body contents — strip the wrapper DOMDocument adds
+            $newHtml = '';
+            foreach ($doc->childNodes as $node) {
+                $newHtml .= $doc->saveHTML($node);
+            }
+            // Remove the encoding hint we injected
+            $newHtml = str_replace('<?xml encoding="UTF-8">', '', $newHtml);
+
+            Post::updateContentHtml((int)$post['id'], $newHtml);
+            $rewritten++;
+        }
+
+        $this->log($verbose, "Rewrote content image paths in {$rewritten} post(s) (width: {$width}px).");
     }
 
     private function writeFeed(bool $verbose): void

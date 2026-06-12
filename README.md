@@ -64,6 +64,10 @@ class BlogConfig extends Config
     // Image sizes to generate (widths in px). Override to customise.
     // Return [] to disable image processing.
     public function getImageSizes(): array { return [800, 1200]; }
+
+    // Which of the above widths to use when rewriting <img> src paths in
+    // post content HTML after image processing. Return null to disable.
+    public function getContentImageWidth(): ?int { return 800; }
 }
 ```
 
@@ -194,7 +198,7 @@ categories/
 
 ### Build (or rebuild) the index
 
-Scans the `posts/` and `categories/` directories, converts Markdown to HTML, upserts everything into the SQLite database, writes `feed.xml` and `sitemap.xml` to `getPublicDir()`, then processes post images. Safe to run repeatedly.
+Scans the `posts/` and `categories/` directories, converts Markdown to HTML, upserts everything into the SQLite database, writes `feed.xml` and `sitemap.xml` to `getPublicDir()`, processes post images, and rewrites `<img>` src paths in post content HTML to point to the generated WebP files (if `getContentImageWidth()` is set). Safe to run repeatedly.
 
 ```bash
 # via Composer script
@@ -240,6 +244,19 @@ For example, if `posts/hello-world/hero.jpg` is processed at widths `[800, 1200]
 ```
 
 Return an empty array from `getImageSizes()` to disable image processing entirely.
+
+#### Rewriting content image paths
+
+After images are processed, build-index can also rewrite the `<img src>` attributes in the stored post HTML to point to the generated WebP files. To enable this, override `getContentImageWidth()` in your `Config` and return one of the widths from `getImageSizes()`:
+
+```php
+public function getContentImageWidth(): ?int
+{
+    return 800; // must be one of the values in getImageSizes()
+}
+```
+
+Returning `null` (the default) disables the rewrite step. Only `src` attributes that resolve to an existing file on disk are updated, so the step is safe to run when `ext-imagick` is missing.
 
 ### Import from WordPress (one-time migration)
 

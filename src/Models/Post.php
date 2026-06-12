@@ -35,6 +35,13 @@ class Post extends Model
         return static::query()->where('slug', $slug)->first();
     }
 
+    public static function updateContentHtml(int $id, string $html): void
+    {
+        $db = \BlogCore\Core\Database::getConnection();
+        $stmt = $db->prepare('UPDATE posts SET content_html = :html WHERE id = :id');
+        $stmt->execute([':html' => $html, ':id' => $id]);
+    }
+
     /** QueryBuilder scoped to published (non-draft) posts. */
     public static function published(): QueryBuilder
     {
