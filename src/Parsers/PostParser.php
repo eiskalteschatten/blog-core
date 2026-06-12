@@ -1,0 +1,88 @@
+<?php
+
+declare(strict_types=1);
+
+namespace BlogCore\Parsers;
+
+use RuntimeException;
+
+class PostParser
+{
+    /**
+     * Scan $postsDir for sub-directories, parse each one, and return an array
+     * of post data arrays.
+     */
+    public static function parseAll(string $postsDir): array
+    {
+        if (!is_dir($postsDir)) {
+            throw new RuntimeException("Posts directory not found: {$postsDir}");
+        }
+
+        $posts = [];
+
+        foreach (new \DirectoryIterator($postsDir) as $entry) {
+            if ($entry->isDot() || !$entry->isDir()) {
+                continue;
+            }
+
+            try {
+                $posts[] = self::parseOne($entry->getPathname());
+            } catch (RuntimeException $e) {
+                // Log and skip malformed post directories
+                fwrite(STDERR, "[PostParser] Skipping {$entry->getFilename()}: {$e->getMessage()}\n");
+            }
+        }
+
+        return $posts;
+    }
+
+    /**
+     * Parse a single post directory. Returns a post data array ready for
+     * PostModel::upsertFromData().
+     *
+     * @throws RuntimeException if meta.json or post.md is missing/invalid.
+     */
+    public static function parseOne(string $dir): array
+    {
+        $metaPath = $dir . '/meta.json';
+        $mdPath   = $dir . '/post.md';
+
+        if (!file_exists($metaPath)) {
+            throw new RuntimeException("meta.json not found in {$dir}");
+        }
+
+        if (!file_exists($mdPath)) {
+            throw new RuntimeException("post.md not found in {$dir}");
+        }
+
+        $meta = json_decode(file_get_contents($metaPath), true, 512, JSON_THROW_ON_ERROR);
+
+        if (!is_array($meta)) {
+            throw new RuntimeException("meta.json is not a valid JSON object in {$dir}");
+        }
+
+        if (empty($meta['slug'])) {
+            throw new RuntimeException("meta.json is missing 'slug' in {$dir}");
+        }
+
+        if (empty($meta['title'])) {
+            throw new RuntimeException("meta.json is missing 'title' in {$dir}");
+        }
+
+        $markdown    = file_get_contents($mdPath);
+        $contentHtml = MarkdownParser::toHtml($markdown);
+
+        return [
+            'title'        => (string)$meta['title'],
+            'slug'         => (string)$meta['slug'],
+            'description'  => isset($meta['description'])  ? (string)$meta['description']  : null,
+            'image'        => isset($meta['image'])         ? (string)$meta['image']         : null,
+            'content_html' => $contentHtml,
+            'is_draft'     => (bool)($meta['draft']    ?? false),
+            'featured'     => (bool)($meta['featured'] ?? false),
+            'published_at' => isset($meta['publishedAt']) ? (string)$meta['publishedAt'] : null,
+            'tags'         => array_values(array_filter(array_map('strval', (array)($meta['tags'] ?? [])))),
+            'categories'   => array_values(array_filter(array_map('strval', (array)($meta['categories'] ?? [])))),
+        ];
+    }
+}

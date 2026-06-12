@@ -9,7 +9,10 @@
     "autoload": {
         "psr-4": {
             "BlogCore\\": "src/"
-        }
+        },
+        "files": [
+            "src/lib/Parsedown.php"
+        ]
     },
     "minimum-stability": "stable"
 }
