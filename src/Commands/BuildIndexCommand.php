@@ -29,27 +29,5 @@ class BuildIndexCommand
         }
     }
 
-    /**
-     * Standalone entry point for the `blog-core-build` vendor binary.
-     * Discovers config via a `blog-core.config.php` file in CWD.
-     */
-    public static function main(array $argv = []): void
-    {
-        $configFile = getcwd() . '/blog-core.config.php';
 
-        if (!file_exists($configFile)) {
-            fwrite(STDERR, "Error: blog-core.config.php not found in " . getcwd() . "\n");
-            fwrite(STDERR, "Alternatively, call BuildIndexCommand::run(\$config, \$argv) from your own bin script.\n");
-            exit(1);
-        }
-
-        $config = require $configFile;
-
-        if (!$config instanceof Config) {
-            fwrite(STDERR, "Error: blog-core.config.php must return a BlogCore\\Core\\Config instance.\n");
-            exit(1);
-        }
-
-        self::run($config, $argv);
-    }
 }

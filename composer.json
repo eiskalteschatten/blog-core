@@ -10,7 +10,6 @@
     "suggest": {
         "ext-imagick": "Required for automatic post image resizing and WebP conversion."
     },
-    "bin": ["bin/blog-core-build"],
     "autoload": {
         "psr-4": {
             "BlogCore\\": "src/"
