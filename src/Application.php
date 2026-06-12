@@ -183,8 +183,8 @@ class Application
             ]);
         });
 
-        // RSS feed
-        $router->add('GET', $prefix . '/feeds/posts.xml', function () use ($renderer, $config): void {
+        // RSS feed (dynamic fallback — static feed.xml written by build-index takes precedence)
+        $router->add('GET', $prefix . '/feed.xml', function () use ($renderer, $config): void {
             $posts = Post::published()
                 ->orderBy('published_at', 'DESC')
                 ->limit(35)

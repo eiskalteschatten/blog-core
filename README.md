@@ -227,7 +227,7 @@ blog-core registers these routes automatically. All routes are prefixed with the
 | GET | `/categories/:slug` | `pages/categories/single` | Single category with its posts |
 | GET | `/tags` | `pages/tags/index` | All tags |
 | GET | `/tags/:slug` | `pages/tags/single` | Single tag with its posts |
-| GET | `/feeds/posts.xml` | *(none — raw RSS 2.0 XML)* | RSS feed |
+| GET | `/feed.xml` | *(none — raw RSS 2.0 XML)* | RSS feed (dynamic fallback; prefer the static file written by `build-index`) |
 | GET | `/sitemap.xml` | *(none — raw XML)* | XML sitemap (dynamic fallback; prefer the static file written by `build-index`) |
 
 View templates are resolved relative to `Config::getViewsDir()`. A `pages/404` template is used for not-found responses.

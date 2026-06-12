@@ -19,7 +19,7 @@ class FeedHelper
     {
         $siteUrl   = rtrim($config->getSiteUrl(), '/');
         $siteTitle = htmlspecialchars($config->getSiteTitle(), ENT_XML1);
-        $feedUrl   = htmlspecialchars($siteUrl . '/feeds/posts.xml', ENT_XML1);
+        $feedUrl   = htmlspecialchars($siteUrl . '/feed.xml', ENT_XML1);
         $homeUrl   = htmlspecialchars($siteUrl, ENT_XML1);
         $buildDate = htmlspecialchars(date(DATE_RSS), ENT_XML1);
 

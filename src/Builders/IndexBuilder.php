@@ -12,6 +12,7 @@ use BlogCore\Models\Post;
 use BlogCore\Models\PostCategoryMapper;
 use BlogCore\Models\PostTagMapper;
 use BlogCore\Models\Tag;
+use BlogCore\Helpers\FeedHelper;
 use BlogCore\Helpers\SitemapHelper;
 use BlogCore\Parsers\CategoryParser;
 use BlogCore\Parsers\PostParser;
@@ -38,6 +39,7 @@ class IndexBuilder
 
         $this->indexCategories($verbose);
         $this->indexPosts($verbose);
+        $this->writeFeed($verbose);
         $this->writeSitemap($verbose);
 
         $this->log($verbose, "Index complete.");
@@ -92,6 +94,29 @@ class IndexBuilder
             $draft = $data['is_draft'] ? ' [draft]' : '';
             $this->log($verbose, "  Post: {$data['title']} ({$data['slug']}){$draft}");
         }
+    }
+
+    private function writeFeed(bool $verbose): void
+    {
+        $publicDir = rtrim($this->config->getPublicDir(), '/');
+
+        if (!is_dir($publicDir)) {
+            throw new RuntimeException("Public directory not found: {$publicDir}");
+        }
+
+        $posts = Post::published()
+            ->orderBy('published_at', 'DESC')
+            ->limit(35)
+            ->get();
+
+        $path = $publicDir . '/feed.xml';
+        $xml  = FeedHelper::generate($posts, $this->config);
+
+        if (file_put_contents($path, $xml) === false) {
+            throw new RuntimeException("Could not write feed to: {$path}");
+        }
+
+        $this->log($verbose, "Feed written to {$path}");
     }
 
     private function writeSitemap(bool $verbose): void
