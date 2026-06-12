@@ -192,5 +192,10 @@ class Application
 
             $renderer->xml(FeedHelper::generate($posts, $config));
         });
+
+        // Sitemap (dynamic fallback — static sitemap.xml written by build-index takes precedence)
+        $router->add('GET', $prefix . '/sitemap.xml', function () use ($renderer, $config): void {
+            $renderer->xml(SitemapHelper::generate($config));
+        });
     }
 }
