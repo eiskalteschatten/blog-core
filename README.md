@@ -265,7 +265,8 @@ Connects to the WordPress REST API (v2) and imports all posts and categories int
 **What it does:**
 - Fetches all categories → writes one `categories/{slug}.json` per category
 - Batch-fetches all tags up-front (no per-post tag API calls)
-- Fetches all published and draft posts → writes `posts/{slug}/meta.json` + `posts/{slug}/post.md`
+- Fetches all published posts; also fetches draft posts when `--auth` is supplied
+- Writes `posts/{slug}/meta.json` + `posts/{slug}/post.md` for each post
 - Downloads all images (featured and inline content) to `posts/{slug}/` so `process-images` can generate WebP versions
 - Inline image `src` attributes are rewritten to `/images/posts/{slug}/{basename}`
 - Strips WordPress-specific HTML cruft (block classes, poll blocks, `srcset`/`sizes`, etc.)
@@ -286,7 +287,12 @@ php bin/import_wordpress.php --url https://example.com --post my-post-slug
 
 # re-import (overwrite) already-imported content
 php bin/import_wordpress.php --url https://example.com --force
+
+# include draft posts (requires authentication)
+php bin/import_wordpress.php --url https://example.com --auth username:app-password
 ```
+
+**Importing drafts** requires a WordPress Application Password. Generate one under **Users → Profile → Application Passwords** in the WordPress admin. The `--auth` value is sent as HTTP Basic Auth and applies to all API requests including image downloads.
 
 **After importing**, run `build-index` to populate the SQLite database and `process-images` to generate WebP versions of the featured images:
 

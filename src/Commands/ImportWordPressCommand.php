@@ -53,13 +53,14 @@ class ImportWordPressCommand
         $force    = in_array('--force', $argv, true);
         $siteUrl  = self::parseArg('--url', $argv);
         $onlySlug = self::parseArg('--post', $argv);
+        $auth     = self::parseArg('--auth', $argv);
 
         if ($siteUrl === null) {
             fwrite(STDERR, "Error: --url <wordpress-site-url> is required.\n");
             exit(1);
         }
 
-        static::execute($config, rtrim($siteUrl, '/'), $onlySlug, $force, $verbose);
+        static::execute($config, rtrim($siteUrl, '/'), $onlySlug, $force, $verbose, $auth);
     }
 
     /**
@@ -68,13 +69,16 @@ class ImportWordPressCommand
      * @param string      $siteUrl   WordPress site base URL (no trailing slash).
      * @param string|null $onlySlug  Import only the post with this slug.
      * @param bool        $force     Re-import posts that already exist on disk.
+     * @param string|null $auth      HTTP Basic Auth credentials as "username:password".
+     *                               Required to import draft posts via the WP REST API.
      */
     public static function execute(
         Config  $config,
         string  $siteUrl,
         ?string $onlySlug = null,
         bool    $force    = false,
-        bool    $verbose  = false
+        bool    $verbose  = false,
+        ?string $auth     = null
     ): void {
         self::requireCurl();
 
@@ -86,7 +90,7 @@ class ImportWordPressCommand
         self::log($verbose, 'Fetching tags...');
         $tagMap = []; // [wp-id => name]
 
-        foreach (self::fetchAllPaged($apiBase . '/tags?per_page=100') as $tag) {
+        foreach (self::fetchAllPaged($apiBase . '/tags?per_page=100', $auth) as $tag) {
             $tagMap[(int)$tag['id']] = $tag['name'];
         }
 
@@ -96,13 +100,13 @@ class ImportWordPressCommand
         // 2. Import categories
         // ------------------------------------------------------------------
         self::log($verbose, 'Importing categories...');
-        $categoryMap = self::importCategories($apiBase, $config, $force, $verbose);
+        $categoryMap = self::importCategories($apiBase, $config, $force, $verbose, $auth);
 
         // ------------------------------------------------------------------
         // 3. Import posts
         // ------------------------------------------------------------------
         self::log($verbose, 'Importing posts...');
-        self::importPosts($apiBase, $config, $tagMap, $categoryMap, $onlySlug, $force, $verbose);
+        self::importPosts($apiBase, $config, $tagMap, $categoryMap, $onlySlug, $force, $verbose, $auth);
 
         self::log($verbose, 'Import complete.');
     }
@@ -116,15 +120,16 @@ class ImportWordPressCommand
      * Returns a map of [wp-id => slug].
      */
     private static function importCategories(
-        string $apiBase,
-        Config $config,
-        bool   $force,
-        bool   $verbose
+        string  $apiBase,
+        Config  $config,
+        bool    $force,
+        bool    $verbose,
+        ?string $auth = null
     ): array {
         $catDir     = rtrim($config->getCategoriesDir(), '/');
         $categoryMap = [];
 
-        $wpCategories = self::fetchAllPaged($apiBase . '/categories?per_page=100');
+        $wpCategories = self::fetchAllPaged($apiBase . '/categories?per_page=100', $auth);
 
         foreach ($wpCategories as $cat) {
             $wpId = (int)$cat['id'];
@@ -178,19 +183,21 @@ class ImportWordPressCommand
         array   $categoryMap,
         ?string $onlySlug,
         bool    $force,
-        bool    $verbose
+        bool    $verbose,
+        ?string $auth = null
     ): void {
         $postsDir = rtrim($config->getPostsDir(), '/');
 
         // Request only the fields we need
         $fields   = 'id,slug,title,excerpt,content,status,categories,tags,featured_media,date,modified';
-        $endpoint = $apiBase . '/posts?per_page=20&status=publish,draft&_fields=' . $fields;
+        $statuses = $auth !== null ? 'publish,draft' : 'publish';
+        $endpoint = $apiBase . '/posts?per_page=20&status=' . $statuses . '&_fields=' . $fields;
 
         if ($onlySlug !== null) {
             $endpoint .= '&slug=' . urlencode($onlySlug);
         }
 
-        $wpPosts = self::fetchAllPaged($endpoint);
+        $wpPosts = self::fetchAllPaged($endpoint, $auth);
 
         if (empty($wpPosts)) {
             self::log($verbose, '  No posts found.');
@@ -198,19 +205,20 @@ class ImportWordPressCommand
         }
 
         foreach ($wpPosts as $post) {
-            self::importPost($post, $apiBase, $config, $postsDir, $tagMap, $categoryMap, $force, $verbose);
+            self::importPost($post, $apiBase, $config, $postsDir, $tagMap, $categoryMap, $force, $verbose, $auth);
         }
     }
 
     private static function importPost(
-        array  $post,
-        string $apiBase,
-        Config $config,
-        string $postsDir,
-        array  $tagMap,
-        array  $categoryMap,
-        bool   $force,
-        bool   $verbose
+        array   $post,
+        string  $apiBase,
+        Config  $config,
+        string  $postsDir,
+        array   $tagMap,
+        array   $categoryMap,
+        bool    $force,
+        bool    $verbose,
+        ?string $auth = null
     ): void {
         $slug     = $post['slug'];
         $postDir  = $postsDir . '/' . $slug;
@@ -248,14 +256,14 @@ class ImportWordPressCommand
 
         if ($featuredMediaId > 0) {
             $featuredImagePath = self::importFeaturedImage(
-                $apiBase, $featuredMediaId, $slug, $postDir, $verbose
+                $apiBase, $featuredMediaId, $slug, $postDir, $verbose, $auth
             );
         }
 
         // Content HTML — clean WordPress markup, download inline images to posts/{slug}/
         // and rewrite their srcs to /images/posts/{slug}/{basename}
         $html = self::cleanHtml($post['content']['rendered'] ?? '');
-        $html = self::downloadInlineImages($html, $slug, $postDir, $verbose);
+        $html = self::downloadInlineImages($html, $slug, $postDir, $verbose, $auth);
 
         // Write meta.json
         $meta = [
@@ -292,14 +300,15 @@ class ImportWordPressCommand
      * Returns the expected public URL path that process-images will serve.
      */
     private static function importFeaturedImage(
-        string $apiBase,
-        int    $mediaId,
-        string $slug,
-        string $postDir,
-        bool   $verbose
+        string  $apiBase,
+        int     $mediaId,
+        string  $slug,
+        string  $postDir,
+        bool    $verbose,
+        ?string $auth = null
     ): ?string {
         try {
-            $response = self::get($apiBase . '/media/' . $mediaId);
+            $response = self::get($apiBase . '/media/' . $mediaId, $auth);
             $media    = json_decode($response['body'], true, 512, JSON_THROW_ON_ERROR);
             $srcUrl   = $media['source_url'] ?? null;
 
@@ -309,7 +318,7 @@ class ImportWordPressCommand
 
             $basename = basename(parse_url($srcUrl, PHP_URL_PATH));
 
-            self::downloadFile($srcUrl, $postDir . '/' . $basename, $verbose);
+            self::downloadFile($srcUrl, $postDir . '/' . $basename, $verbose, $auth);
 
             return '/images/posts/' . $slug . '/' . $basename;
         } catch (\Throwable $e) {
@@ -324,10 +333,11 @@ class ImportWordPressCommand
      * /images/posts/{slug}/{basename} (where process-images will publish it).
      */
     private static function downloadInlineImages(
-        string $html,
-        string $slug,
-        string $postDir,
-        bool   $verbose
+        string  $html,
+        string  $slug,
+        string  $postDir,
+        bool    $verbose,
+        ?string $auth = null
     ): string {
         if (trim($html) === '' || !str_contains($html, '<img')) {
             return $html;
@@ -348,7 +358,7 @@ class ImportWordPressCommand
 
             $basename = basename(parse_url($src, PHP_URL_PATH));
 
-            if (self::downloadFile($src, $postDir . '/' . $basename, $verbose)) {
+            if (self::downloadFile($src, $postDir . '/' . $basename, $verbose, $auth)) {
                 $img->setAttribute('src', '/images/posts/' . $slug . '/' . $basename);
             }
         }
@@ -440,7 +450,7 @@ class ImportWordPressCommand
      * Fetch all pages of a paginated WordPress REST API endpoint.
      * Handles X-WP-TotalPages automatically.
      */
-    private static function fetchAllPaged(string $url): array
+    private static function fetchAllPaged(string $url, ?string $auth = null): array
     {
         $results    = [];
         $page       = 1;
@@ -448,7 +458,7 @@ class ImportWordPressCommand
 
         do {
             $sep      = str_contains($url, '?') ? '&' : '?';
-            $response = self::get($url . $sep . 'page=' . $page);
+            $response = self::get($url . $sep . 'page=' . $page, $auth);
 
             $data = json_decode($response['body'], true, 512, JSON_THROW_ON_ERROR);
 
@@ -467,11 +477,11 @@ class ImportWordPressCommand
     /**
      * HTTP GET. Returns ['body' => string, 'totalPages' => int].
      */
-    private static function get(string $url): array
+    private static function get(string $url, ?string $auth = null): array
     {
         $ch = curl_init();
 
-        curl_setopt_array($ch, [
+        $opts = [
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
@@ -479,7 +489,14 @@ class ImportWordPressCommand
             CURLOPT_USERAGENT      => self::USER_AGENT,
             CURLOPT_TIMEOUT        => 30,
             CURLOPT_SSL_VERIFYPEER => true,
-        ]);
+        ];
+
+        if ($auth !== null) {
+            $opts[CURLOPT_USERPWD] = $auth;
+            $opts[CURLOPT_HTTPAUTH] = CURLAUTH_BASIC;
+        }
+
+        curl_setopt_array($ch, $opts);
 
         $raw      = curl_exec($ch);
         $errno    = curl_errno($ch);
@@ -512,7 +529,7 @@ class ImportWordPressCommand
      * Download $url to $dest. Skips if $dest already exists.
      * Returns true on success or skip, false on failure.
      */
-    private static function downloadFile(string $url, string $dest, bool $verbose): bool
+    private static function downloadFile(string $url, string $dest, bool $verbose, ?string $auth = null): bool
     {
         if (file_exists($dest)) {
             return true;
@@ -528,13 +545,20 @@ class ImportWordPressCommand
         $fh = fopen($dest, 'wb');
         $ch = curl_init($url);
 
-        curl_setopt_array($ch, [
+        $opts = [
             CURLOPT_FILE           => $fh,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT        => 60,
             CURLOPT_USERAGENT      => self::USER_AGENT,
             CURLOPT_SSL_VERIFYPEER => true,
-        ]);
+        ];
+
+        if ($auth !== null) {
+            $opts[CURLOPT_USERPWD] = $auth;
+            $opts[CURLOPT_HTTPAUTH] = CURLAUTH_BASIC;
+        }
+
+        curl_setopt_array($ch, $opts);
 
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
