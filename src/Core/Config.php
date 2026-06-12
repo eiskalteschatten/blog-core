@@ -79,7 +79,7 @@ abstract class Config
      */
     public function getImageSizes(): array
     {
-        return [800, 1200];
+        return [800, 1600];
     }
 
     /**
@@ -89,7 +89,7 @@ abstract class Config
      */
     public function getContentImageWidth(): ?int
     {
-        return null;
+        return 1600;
     }
 
     /**
