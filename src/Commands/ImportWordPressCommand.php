@@ -431,6 +431,24 @@ class ImportWordPressCommand
             $node->parentNode->removeChild($node);
         }
 
+        // Replace WordPress slideshow blocks (<div data-effect="slide">) with
+        // <image-carousel> custom elements containing flat <figure> children.
+        foreach ($xpath->query('//div[@data-effect="slide"]') as $slideDiv) {
+            $carousel = $dom->createElement('image-carousel');
+
+            foreach ($xpath->query('.//li/figure', $slideDiv) as $figure) {
+                // Still part of $dom here, so $xpath can query inside it
+                foreach ($xpath->query('.//img', $figure) as $img) {
+                    $img->setAttribute('loading', 'lazy');
+                    $img->removeAttribute('data-id');
+                }
+
+                $carousel->appendChild($figure->cloneNode(true));
+            }
+
+            $slideDiv->parentNode->replaceChild($carousel, $slideDiv);
+        }
+
         // Serialize body contents only
         $body   = $dom->getElementsByTagName('body')->item(0);
         $output = '';
