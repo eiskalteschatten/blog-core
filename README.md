@@ -37,6 +37,7 @@ A reusable, dependency-light PHP library for building file-system-based blogs. P
 
 - PHP ≥ 8.1
 - SQLite (via the bundled `pdo_sqlite` extension)
+- ImageMagick (ext-imagick)
 
 ---
 
