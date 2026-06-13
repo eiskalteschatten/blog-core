@@ -6,7 +6,6 @@ namespace BlogCore\Models;
 
 use BlogCore\Core\Model;
 use BlogCore\Core\QueryBuilder;
-
 class Post extends Model
 {
     protected static string $table = 'posts';
@@ -53,8 +52,7 @@ class Post extends Model
     /** Return all categories linked to a post. */
     public static function categories(int $postId): array
     {
-        return static::query()
-            ->select('categories.*')
+        return Category::query()
             ->join('post_category_mapper', 'post_category_mapper.category_id = categories.id')
             ->where('post_category_mapper.post_id', $postId)
             ->get();
@@ -63,8 +61,7 @@ class Post extends Model
     /** Return all tags linked to a post. */
     public static function tags(int $postId): array
     {
-        return static::query()
-            ->select('tags.*')
+        return Tag::query()
             ->join('post_tag_mapper', 'post_tag_mapper.tag_id = tags.id')
             ->where('post_tag_mapper.post_id', $postId)
             ->get();
