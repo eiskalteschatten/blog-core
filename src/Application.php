@@ -101,7 +101,10 @@ class Application
 
         // Single post
         $router->add('GET', $prefix . '/posts/:slug', function (array $params) use ($renderer): void {
-            $post = Post::published()->where('slug', $params['slug'])->first();
+            $isDevServer = str_contains($_SERVER['SERVER_SOFTWARE'] ?? '', 'Development Server');
+            $post = $isDevServer
+                ? Post::findBySlug($params['slug'])
+                : Post::published()->where('slug', $params['slug'])->first();
 
             if (!$post) {
                 http_response_code(404);
