@@ -1,3 +1,5 @@
+import { openLightbox } from './light-box.js';
+
 class ImageCarouselButton extends HTMLElement {
   constructor() {
     super();
