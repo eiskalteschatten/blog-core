@@ -355,8 +355,28 @@ blog-core registers these routes automatically. All routes are prefixed with the
 | GET | `/tags/:slug` | `pages/tags/single` | Single tag with its posts |
 | GET | `/feed.xml` | *(none — raw RSS 2.0 XML)* | RSS feed (dynamic fallback; prefer the static file written by `build-index`) |
 | GET | `/sitemap.xml` | *(none — raw XML)* | XML sitemap (dynamic fallback; prefer the static file written by `build-index`) |
+| GET | `/api/posts` | *(none — JSON)* | Published posts (see [API](#api)) |
 
 View templates are resolved relative to `Config::getViewsDir()`. A `pages/404` template is used for not-found responses.
+
+### API
+
+#### `GET /api/posts`
+
+Returns a JSON array of published posts ordered by `published_at` descending.
+
+| Query parameter | Default | Description |
+|---|---|---|
+| `limit` | `getPostsPerPage()` | Maximum number of posts to return (minimum: 1) |
+| `offset` | `0` | Number of posts to skip (minimum: 0) |
+
+```
+GET /api/posts
+GET /api/posts?limit=5
+GET /api/posts?limit=10&offset=20
+```
+
+Each item in the array is a post row from the database (same fields available in the view templates: `id`, `title`, `slug`, `description`, `image`, `content_html`, `published_at`, etc.).
 
 ### Adding custom routes
 

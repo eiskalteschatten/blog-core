@@ -183,6 +183,21 @@ class Application
             ]);
         });
 
+        // API: published posts
+        $router->add('GET', $prefix . '/api/posts', function () use ($renderer, $config): void {
+            $defaultLimit = $config->getPostsPerPage();
+            $limit        = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : $defaultLimit;
+            $offset       = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
+
+            $posts = Post::published()
+                ->orderBy('published_at', 'DESC')
+                ->limit($limit)
+                ->offset($offset)
+                ->get();
+
+            $renderer->json($posts);
+        });
+
         // RSS feed (dynamic fallback — static feed.xml written by build-index takes precedence)
         $router->add('GET', $prefix . '/feed.xml', function () use ($renderer, $config): void {
             $posts = Post::published()
