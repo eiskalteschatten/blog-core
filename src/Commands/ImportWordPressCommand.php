@@ -504,8 +504,6 @@ class ImportWordPressCommand
         $hdrSize  = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-        curl_close($ch);
-
         if ($errno !== 0) {
             throw new RuntimeException("cURL error for {$url}: {$error}");
         }
@@ -564,7 +562,6 @@ class ImportWordPressCommand
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno    = curl_errno($ch);
 
-        curl_close($ch);
         fclose($fh);
 
         if ($errno !== 0 || $httpCode !== 200) {
