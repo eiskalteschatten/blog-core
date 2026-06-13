@@ -4,6 +4,34 @@ A reusable, dependency-light PHP library for building file-system-based blogs. P
 
 ---
 
+## Table of contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Host project setup](#host-project-setup)
+  - [1. Extend Config](#1-extend-config)
+  - [2. Bootstrap the web entry point](#2-bootstrap-the-web-entry-point)
+  - [3. Create a bin script](#3-create-a-bin-script)
+  - [4. Add a Composer script (optional)](#4-add-a-composer-script-optional)
+- [Content format](#content-format)
+  - [Posts](#posts)
+  - [Categories](#categories)
+- [Commands](#commands)
+  - [Build (or rebuild) the index](#build-or-rebuild-the-index)
+  - [Process post images](#process-post-images-also-runs-automatically-as-part-of-build-index)
+  - [Import from WordPress (one-time migration)](#import-from-wordpress-one-time-migration)
+  - [Publish core assets](#publish-core-assets-also-runs-automatically-as-part-of-build-index)
+  - [Start the development server](#start-the-development-server)
+- [Routing](#routing)
+  - [Default routes](#default-routes)
+  - [API](#api)
+  - [Adding custom routes](#adding-custom-routes)
+  - [Route prefix](#route-prefix)
+- [Views](#views)
+  - [Variable reference](#variable-reference)
+
+---
+
 ## Requirements
 
 - PHP ≥ 8.1
