@@ -41,14 +41,10 @@ class Category extends Model
     /** QueryBuilder for published posts belonging to this category. */
     public static function posts(int $categoryId, bool $includeDrafts = false): QueryBuilder
     {
-        $qb = Post::query()
+        $base = $includeDrafts ? Post::query() : Post::published();
+
+        return $base
             ->join('post_category_mapper', 'post_category_mapper.post_id = posts.id')
             ->where('post_category_mapper.category_id', $categoryId);
-
-        if (!$includeDrafts) {
-            $qb->where('posts.is_draft', 0);
-        }
-
-        return $qb;
     }
 }

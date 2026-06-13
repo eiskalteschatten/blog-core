@@ -36,14 +36,10 @@ class Tag extends Model
     /** QueryBuilder for published posts belonging to this tag. */
     public static function posts(int $tagId, bool $includeDrafts = false): QueryBuilder
     {
-        $qb = Post::query()
+        $base = $includeDrafts ? Post::query() : Post::published();
+
+        return $base
             ->join('post_tag_mapper', 'post_tag_mapper.post_id = posts.id')
             ->where('post_tag_mapper.tag_id', $tagId);
-
-        if (!$includeDrafts) {
-            $qb->where('posts.is_draft', 0);
-        }
-
-        return $qb;
     }
 }

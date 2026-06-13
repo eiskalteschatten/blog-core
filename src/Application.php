@@ -101,9 +101,9 @@ class Application
 
         // Single post
         $router->add('GET', $prefix . '/posts/:slug', function (array $params) use ($renderer): void {
-            $post = Post::findBySlug($params['slug']);
+            $post = Post::published()->where('slug', $params['slug'])->first();
 
-            if (!$post || $post['is_draft']) {
+            if (!$post) {
                 http_response_code(404);
                 $renderer->render('pages/404', []);
                 return;

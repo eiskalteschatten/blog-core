@@ -42,10 +42,12 @@ class Post extends Model
         $stmt->execute([':html' => $html, ':id' => $id]);
     }
 
-    /** QueryBuilder scoped to published (non-draft) posts. */
+    /** QueryBuilder scoped to published (non-draft, non-scheduled) posts. */
     public static function published(): QueryBuilder
     {
-        return static::query()->where('is_draft', 0);
+        return static::query()
+            ->where('is_draft', 0)
+            ->whereRaw("(published_at IS NULL OR published_at <= datetime('now'))");
     }
 
     /** Return all categories linked to a post. */
