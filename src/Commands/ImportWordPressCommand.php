@@ -439,7 +439,7 @@ class ImportWordPressCommand
             $output .= $dom->saveHTML($child);
         }
 
-        return trim($output);
+        return trim(preg_replace('/\n{3,}/', "\n\n", $output));
     }
 
     // -------------------------------------------------------------------------
