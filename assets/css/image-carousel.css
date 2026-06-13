@@ -70,6 +70,7 @@ image-carousel-nav-button, image-carousel-lightbox-button {
 image-carousel-nav-button {
   top: 50%;
   transform: translateY(-50%);
+  font-size: 16px;
 
   &[data-variant="prev"] {
     left: 10px;
@@ -87,6 +88,7 @@ image-carousel-nav-button {
 image-carousel-lightbox-button {
   top: 10px;
   right: 10px;
+  font-size: 26px;
 }
 
 light-box {
@@ -130,6 +132,7 @@ light-box {
     user-select: none;
     opacity: .8;
     transition: opacity 300ms;
+    font-size: 18px;
 
     &:hover {
       opacity: 1;

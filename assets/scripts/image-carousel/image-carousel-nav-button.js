@@ -5,10 +5,10 @@ class ImageCarouselNavButton extends HTMLElement {
 
   connectedCallback() {
     if (this.dataset.variant === 'prev') {
-      this.innerHTML = '<i class="material-icons">arrow_back_ios</i>';
+      this.innerHTML = '&#x25C0;';
     }
     else if (this.dataset.variant === 'next') {
-      this.innerHTML = '<i class="material-icons">arrow_forward_ios</i>';
+      this.innerHTML = '&#x25B6;';
     }
 
     this.onclick = this.handleClick;

@@ -5,11 +5,7 @@ class LightBox extends HTMLElement {
 
     this.innerHTML = `
       <img src="${imageSrc}" alt="${caption}" class="lightbox-image">
-
-      <button class="close-button">
-        <span class="material-icons">close</span>
-      </button>
-
+      <button class="close-button">&#x2715;</button>
       <div class="caption">${caption}</div>
     `;
 

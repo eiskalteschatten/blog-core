@@ -6,7 +6,7 @@ class ImageCarouselButton extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = '<i class="material-icons">open_in_full</i>';
+    this.innerHTML = '&#x2922;';
     this.onclick = this.handleClick;
   }
 
