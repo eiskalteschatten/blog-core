@@ -47,7 +47,7 @@ class Post extends Model
     {
         return static::query()
             ->where('is_draft', 0)
-            ->whereRaw("(published_at IS NULL OR published_at <= datetime('now'))");
+            ->whereRaw("(published_at <= datetime('now'))");
     }
 
     /** Return all categories linked to a post. */
