@@ -49,6 +49,17 @@ class Post extends Model
             ->whereRaw("(published_at <= datetime('now'))");
     }
 
+    /** QueryBuilder scoped to published posts matching a search query. */
+    public static function search(string $query): QueryBuilder
+    {
+        $like = '%' . $query . '%';
+        return static::published()
+            ->whereRaw(
+                '(title LIKE ? OR description LIKE ? OR content_html LIKE ?)',
+                [$like, $like, $like]
+            );
+    }
+
     /** Return all categories linked to a post. */
     public static function categories(int $postId): array
     {

@@ -201,6 +201,25 @@ class Application
             $renderer->json($posts);
         });
 
+        // Search
+        $router->add('GET', $prefix . '/search', function () use ($renderer, $config): void {
+            $query = trim($_GET['q'] ?? '');
+            $page  = PaginationHelper::currentPage();
+
+            $pagination = $query !== ''
+                ? PaginationHelper::paginate(
+                    Post::search($query)->orderBy('published_at', 'DESC'),
+                    $page,
+                    $config->getPostsPerPage()
+                )
+                : null;
+
+            $renderer->render('pages/search', [
+                'query'      => $query,
+                'pagination' => $pagination,
+            ]);
+        });
+
         // RSS feed (dynamic fallback — static feed.xml written by build-index takes precedence)
         $router->add('GET', $prefix . '/feed.xml', function () use ($renderer, $config): void {
             $posts = Post::published()
