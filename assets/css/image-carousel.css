@@ -37,7 +37,7 @@ image-carousel {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background-color: var(--color);
+      background-color: currentColor;
       margin: 0 5px;
       transition: opacity 300ms;
       opacity: .4;
@@ -55,7 +55,7 @@ image-carousel-nav-button, image-carousel-lightbox-button {
   color: #ffffff;
   padding: 3px 7px;
   font-size: 12px;
-  border-radius: var(--border-radius);
+  border-radius: 5px;
   cursor: pointer;
   user-select: none;
   opacity: .8;
@@ -127,7 +127,7 @@ light-box {
     padding: 3px 7px;
     font-size: 18px;
     border: 0;
-    border-radius: var(--border-radius);
+    border-radius: 5px;
     cursor: pointer;
     user-select: none;
     opacity: .8;
