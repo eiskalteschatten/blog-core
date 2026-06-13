@@ -19,6 +19,7 @@ A reusable, dependency-light PHP library for building file-system-based blogs. P
 - [Commands](#commands)
   - [Build (or rebuild) the index](#build-or-rebuild-the-index)
   - [Process post images](#process-post-images-also-runs-automatically-as-part-of-build-index)
+  - [Installing ext-imagick](#installing-ext-imagick)
   - [Import from WordPress (one-time migration)](#import-from-wordpress-one-time-migration)
   - [Publish core assets](#publish-core-assets-also-runs-automatically-as-part-of-build-index)
   - [Start the development server](#start-the-development-server)
@@ -285,6 +286,70 @@ public function getContentImageWidth(): ?int
 ```
 
 Returning `null` (the default) disables the rewrite step. Only `src` attributes that resolve to an existing file on disk are updated, so the step is safe to run when `ext-imagick` is missing.
+
+### Installing ext-imagick
+
+#### macOS (Homebrew)
+
+```bash
+brew install imagemagick pkg-config
+pecl install imagick
+```
+
+If PECL fails to compile (e.g. on a very recent PHP version where a pre-built release is not yet available), build from source:
+
+```bash
+brew install imagemagick pkg-config autoconf
+
+git clone https://github.com/Imagick/imagick.git
+cd imagick
+phpize
+./configure
+make
+make install
+```
+
+Then add the following line to your `php.ini` (`php --ini` shows the path):
+
+```ini
+extension=imagick.so
+```
+
+#### Linux (Debian / Ubuntu)
+
+```bash
+apt-get install php-imagick
+```
+
+Or build via PECL if the distro package is outdated:
+
+```bash
+apt-get install libmagickwand-dev
+pecl install imagick
+```
+
+Add to `php.ini`:
+
+```ini
+extension=imagick.so
+```
+
+#### Windows
+
+1. Download the matching DLL from [PECL Windows downloads](https://pecl.php.net/package/imagick) (match your PHP version, architecture, and thread-safety setting).
+2. Copy `php_imagick.dll` to your PHP `ext/` directory.
+3. Download the ImageMagick Windows binaries from [imagemagick.org](https://imagemagick.org/script/download.php#windows) and add the install directory to your system `PATH`.
+4. Add to `php.ini`:
+
+```ini
+extension=php_imagick.dll
+```
+
+Verify installation on any platform:
+
+```bash
+php -m | grep imagick
+```
 
 ### Import from WordPress (one-time migration)
 
