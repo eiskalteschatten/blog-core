@@ -80,6 +80,10 @@ class BlogConfig extends Config
     public function getViewsDir(): string     { return $this->root . '/views'; }
     public function getPublicDir(): string    { return $this->root . '/public'; }
 
+    // Optional: where original source images are stored (default: getPostsDir()).
+    // Mirrors the post directory structure, e.g. media-originals/posts/YYYY/MM/{slug}/
+    public function getOriginalPostImagesDir(): string { return $this->root . '/media-originals/posts'; }
+
     // Optional overrides
     public function getPostsPerPage(): int    { return 12; }          // default: 12
     public function getRoutePrefix(): string  { return ''; }          // e.g. '/blog'
@@ -249,7 +253,7 @@ php bin/build_index.php -v
 
 ### Process post images (also runs automatically as part of `build-index`)
 
-Scans each post directory for images (jpg, jpeg, png, gif, webp, avif, tiff), resizes them to the widths defined in `Config::getImageSizes()`, converts to WebP, and writes them to `public/images/posts/{slug}/{filename}-{width}.webp`.
+Scans `Config::getOriginalPostImagesDir()/YYYY/MM/{slug}/` (mirroring `posts/YYYY/MM/{slug}/`) for images (jpg, jpeg, png, gif, webp, avif, tiff), resizes them to the widths defined in `Config::getImageSizes()`, converts to WebP, and writes them to `public/images/posts/{slug}/{filename}-{width}.webp`.
 
 Already up-to-date outputs (output mtime ≥ source mtime) are skipped. Requires the [`imagick` PHP extension](https://pecl.php.net/package/imagick) (`ext-imagick`); if not loaded, a warning is printed and the step is skipped without failing the build.
 
@@ -271,7 +275,7 @@ To reference a processed image in a post template, the path pattern is:
 /images/posts/{slug}/{original-filename}-{width}.webp
 ```
 
-For example, if `posts/hello-world/hero.jpg` is processed at widths `[800, 1200]`:
+For example, if `media-originals/posts/2026/06/hello-world/hero.jpg` is processed at widths `[800, 1200]`:
 
 ```
 /images/posts/hello-world/hero-800.webp
@@ -366,7 +370,7 @@ Connects to the WordPress REST API (v2) and imports all posts and categories int
 - Batch-fetches all tags up-front (no per-post tag API calls)
 - Fetches all published posts; also fetches draft posts when `--auth` is supplied
 - Writes `posts/YYYY/MM/{slug}/meta.json` + `posts/YYYY/MM/{slug}/post.md` for each post
-- Downloads all images (featured and inline content) to `posts/YYYY/MM/{slug}/` so `process-images` can generate WebP versions
+- Downloads all images (featured and inline content) to `getOriginalPostImagesDir()/YYYY/MM/{slug}/` so `process-images` can generate WebP versions
 - Inline image `src` attributes are rewritten to `/images/posts/{slug}/{basename}`
 - Strips WordPress-specific HTML cruft (block classes, poll blocks, `srcset`/`sizes`, etc.)
 - Skips already-imported posts and categories unless `--force` is passed

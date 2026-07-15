@@ -18,8 +18,8 @@ use RuntimeException;
  *  - Already-imported posts are skipped unless --force is passed
  *  - WordPress HTML is sanitised (classes, poll blocks, cruft removed)
  *  - Inline images are downloaded and src attributes rewritten
- *  - Featured images are downloaded to posts/YYYY/MM/{slug}/ (for process-images
- *    WebP conversion) and public/images/posts/{slug}/ (for immediate access)
+ *  - Featured and inline images are downloaded to
+ *    Config::getOriginalPostImagesDir()/YYYY/MM/{slug}/ for process-images
  *  - Uses the REST API _fields param to fetch only required data
  */
 class ImportWordPressCommand
@@ -187,7 +187,8 @@ class ImportWordPressCommand
         bool    $verbose,
         ?string $auth = null
     ): void {
-        $postsDir = rtrim($config->getPostsDir(), '/');
+        $postsDir         = rtrim($config->getPostsDir(), '/');
+        $sourceImagesBase = rtrim($config->getOriginalPostImagesDir(), '/');
 
         // Request only the fields we need
         $fields   = 'id,slug,title,excerpt,content,status,categories,tags,featured_media,date,modified';
@@ -206,7 +207,7 @@ class ImportWordPressCommand
         }
 
         foreach ($wpPosts as $post) {
-            self::importPost($post, $apiBase, $config, $postsDir, $tagMap, $categoryMap, $force, $verbose, $auth);
+            self::importPost($post, $apiBase, $config, $postsDir, $sourceImagesBase, $tagMap, $categoryMap, $force, $verbose, $auth);
         }
     }
 
@@ -215,6 +216,7 @@ class ImportWordPressCommand
         string  $apiBase,
         Config  $config,
         string  $postsDir,
+        string  $sourceImagesBase,
         array   $tagMap,
         array   $categoryMap,
         bool    $force,
@@ -223,6 +225,7 @@ class ImportWordPressCommand
     ): void {
         $slug     = $post['slug'];
         $postDir  = self::resolvePostDir($postsDir, $slug, (string)($post['date'] ?? ''));
+        $imageDir = self::resolveImageDir($postsDir, $postDir, $sourceImagesBase);
         $metaFile = $postDir . '/meta.json';
         $mdFile   = $postDir . '/post.md';
 
@@ -233,6 +236,10 @@ class ImportWordPressCommand
 
         if (!is_dir($postDir) && !mkdir($postDir, 0755, true)) {
             throw new RuntimeException("Could not create post directory: {$postDir}");
+        }
+
+        if (!is_dir($imageDir) && !mkdir($imageDir, 0755, true)) {
+            throw new RuntimeException("Could not create image directory: {$imageDir}");
         }
 
         $title   = self::decodeEntities($post['title']['rendered'] ?? '');
@@ -251,20 +258,20 @@ class ImportWordPressCommand
             array_map(fn($id) => $categoryMap[(int)$id] ?? null, (array)($post['categories'] ?? []))
         ));
 
-        // Featured image — downloaded to posts/YYYY/MM/{slug}/ so process-images can generate WebP versions
+        // Featured image — downloaded to source images directory for process-images
         $featuredImagePath = null;
         $featuredMediaId   = (int)($post['featured_media'] ?? 0);
 
         if ($featuredMediaId > 0) {
             $featuredImagePath = self::importFeaturedImage(
-                $apiBase, $featuredMediaId, $slug, $postDir, $verbose, $auth
+                $apiBase, $featuredMediaId, $slug, $imageDir, $verbose, $auth
             );
         }
 
-        // Content HTML — clean WordPress markup, download inline images to posts/YYYY/MM/{slug}/
+        // Content HTML — clean WordPress markup, download inline images to source image directory
         // and rewrite their srcs to /images/posts/{slug}/{basename}
         $html = self::cleanHtml($post['content']['rendered'] ?? '');
-        $html = self::downloadInlineImages($html, $slug, $postDir, $verbose, $auth);
+        $html = self::downloadInlineImages($html, $slug, $imageDir, $verbose, $auth);
 
         // Write meta.json
         $meta = [
@@ -297,14 +304,15 @@ class ImportWordPressCommand
 
     /**
      * Fetch the featured image for a post and download it to the post source
-        * directory (posts/YYYY/MM/{slug}/) so process-images can generate WebP versions.
+    * image directory (Config::getOriginalPostImagesDir()/YYYY/MM/{slug}/) so
+      * process-images can generate WebP versions.
      * Returns the expected public URL path that process-images will serve.
      */
     private static function importFeaturedImage(
         string  $apiBase,
         int     $mediaId,
         string  $slug,
-        string  $postDir,
+        string  $imageDir,
         bool    $verbose,
         ?string $auth = null
     ): ?string {
@@ -319,7 +327,7 @@ class ImportWordPressCommand
 
             $basename = basename(parse_url($srcUrl, PHP_URL_PATH));
 
-            self::downloadFile($srcUrl, $postDir . '/' . $basename, $verbose, $auth);
+            self::downloadFile($srcUrl, $imageDir . '/' . $basename, $verbose, $auth);
 
             return '/images/posts/' . $slug . '/' . $basename;
         } catch (\Throwable $e) {
@@ -329,14 +337,15 @@ class ImportWordPressCommand
     }
 
     /**
-     * Find all <img> tags in the HTML, download each image to posts/YYYY/MM/{slug}/
+     * Find all <img> tags in the HTML, download each image to
+    * Config::getOriginalPostImagesDir()/YYYY/MM/{slug}/
      * (where process-images will pick it up), and rewrite the src to
      * /images/posts/{slug}/{basename} (where process-images will publish it).
      */
     private static function downloadInlineImages(
         string  $html,
         string  $slug,
-        string  $postDir,
+        string  $imageDir,
         bool    $verbose,
         ?string $auth = null
     ): string {
@@ -359,7 +368,7 @@ class ImportWordPressCommand
 
             $basename = basename(parse_url($src, PHP_URL_PATH));
 
-            if (self::downloadFile($src, $postDir . '/' . $basename, $verbose, $auth)) {
+            if (self::downloadFile($src, $imageDir . '/' . $basename, $verbose, $auth)) {
                 $img->setAttribute('src', '/images/posts/' . $slug . '/' . $basename);
             }
         }
@@ -649,6 +658,22 @@ class ImportWordPressCommand
         }
 
         return sprintf('%s/%s/%s/%s', $postsDir, $dt->format('Y'), $dt->format('m'), $slug);
+    }
+
+    /**
+     * Resolve image directory by mirroring the post directory structure.
+     */
+    private static function resolveImageDir(string $postsDir, string $postDir, string $sourceImagesBase): string
+    {
+        $postsDir = rtrim($postsDir, '/');
+        $postDir  = rtrim($postDir, '/');
+
+        if (str_starts_with($postDir, $postsDir . '/')) {
+            $relativePostDir = substr($postDir, strlen($postsDir) + 1);
+            return $sourceImagesBase . '/' . $relativePostDir;
+        }
+
+        return $sourceImagesBase . '/' . basename($postDir);
     }
 
     private static function parseWpDate(string $value): ?DateTimeImmutable

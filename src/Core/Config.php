@@ -72,6 +72,21 @@ abstract class Config
     }
 
     /**
+     * Absolute path to original source images used for post image processing.
+     *
+        * Images are expected in a directory tree that mirrors getPostsDir(), e.g.
+        * {originalPostImagesDir}/YYYY/MM/{slug}/.
+        *
+        * Processed outputs are written under public/images/posts/{slug}/.
+     *
+     * Defaults to getPostsDir() for simple setups.
+     */
+    public function getOriginalPostImagesDir(): string
+    {
+        return $this->getPostsDir();
+    }
+
+    /**
      * Image widths (in pixels) to generate when processing post images.
      * Each source image is converted to WebP and resized to every listed width
      * (images are never enlarged). Output goes to public/images/posts/{slug}/.

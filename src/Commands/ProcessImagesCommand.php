@@ -31,7 +31,9 @@ class ProcessImagesCommand
     /**
      * Process all post images using the Imagick PHP extension.
      *
-      * For each post directory (discovered recursively), finds all supported image files, resizes them to
+    * For each post (discovered from post metadata), finds all supported image
+    * files in Config::getOriginalPostImagesDir()/.../{slug}/ (mirroring
+    * getPostsDir()), resizes them to
      * each width defined in Config::getImageSizes(), converts to WebP, and writes
      * the results to public/images/posts/{slug}/{filename}-{width}.webp.
      *
@@ -52,8 +54,16 @@ class ProcessImagesCommand
             return;
         }
 
-        $postsDir   = $config->getPostsDir();
-        $outputBase = rtrim($config->getPublicDir(), '/') . '/images/posts';
+        $postsDir      = $config->getPostsDir();
+        $sourceBaseDir = rtrim($config->getOriginalPostImagesDir(), '/');
+        $outputBase    = rtrim($config->getPublicDir(), '/') . '/images/posts';
+
+        if (!is_dir($sourceBaseDir)) {
+            if ($verbose) {
+                echo "  Images source directory not found: {$sourceBaseDir}\n";
+            }
+            return;
+        }
 
         if (!is_dir($outputBase) && !mkdir($outputBase, 0755, true)) {
             throw new RuntimeException("Could not create output directory: {$outputBase}");
@@ -71,8 +81,14 @@ class ProcessImagesCommand
                 continue;
             }
 
-            $slug   = $meta['slug'] ?? basename($postDir);
-            $images = static::findImages($postDir);
+            $slug = $meta['slug'] ?? basename($postDir);
+
+            if (!is_string($slug) || trim($slug) === '') {
+                continue;
+            }
+
+            $imageSourceDir = static::resolveSourceImageDir($postsDir, $postDir, $sourceBaseDir);
+            $images         = static::findImages($imageSourceDir);
 
             if (empty($images)) {
                 continue;
@@ -184,6 +200,10 @@ class ProcessImagesCommand
     {
         $images = [];
 
+        if (!is_dir($dir)) {
+            return $images;
+        }
+
         foreach (new \DirectoryIterator($dir) as $file) {
             if (!$file->isFile()) {
                 continue;
@@ -195,5 +215,21 @@ class ProcessImagesCommand
 
         sort($images);
         return $images;
+    }
+
+    /**
+     * Resolve source image directory by mirroring the post directory structure.
+     */
+    private static function resolveSourceImageDir(string $postsDir, string $postDir, string $sourceBaseDir): string
+    {
+        $postsDir = rtrim($postsDir, '/');
+        $postDir  = rtrim($postDir, '/');
+
+        if (str_starts_with($postDir, $postsDir . '/')) {
+            $relativePostDir = substr($postDir, strlen($postsDir) + 1);
+            return $sourceBaseDir . '/' . $relativePostDir;
+        }
+
+        return $sourceBaseDir . '/' . basename($postDir);
     }
 }
