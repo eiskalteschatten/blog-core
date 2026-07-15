@@ -101,12 +101,4 @@ abstract class Config
         return [];
     }
 
-    /**
-     * Enable redirects from legacy WordPress-style date URLs
-     * (/YYYY/MM/DD/slug) to canonical post URLs (/posts/{slug}).
-     */
-    public function enableLegacyWordPressDateRedirects(): bool
-    {
-        return false;
-    }
 }

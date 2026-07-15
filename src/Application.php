@@ -122,52 +122,6 @@ class Application
             ]);
         });
 
-        if ($config->enableLegacyWordPressDateRedirects()) {
-            // Legacy WordPress post URL redirect: /YYYY/MM/DD/slug -> /posts/slug
-            $router->add('GET', $prefix . '/:year/:month/:day/:slug', function (array $params) use ($renderer, $prefix): void {
-                $year  = $params['year'];
-                $month = $params['month'];
-                $day   = $params['day'];
-
-                // Strict format validation for legacy date segments.
-                if (!preg_match('/^\d{4}$/', $year)
-                    || !preg_match('/^\d{2}$/', $month)
-                    || !preg_match('/^\d{2}$/', $day)
-                    || !checkdate((int)$month, (int)$day, (int)$year)) {
-                    http_response_code(404);
-                    $renderer->render('pages/404', []);
-                    return;
-                }
-
-                $isDevServer = str_contains($_SERVER['SERVER_SOFTWARE'] ?? '', 'Development Server');
-                $post = $isDevServer
-                    ? Post::findBySlug($params['slug'])
-                    : Post::published()->where('slug', $params['slug'])->first();
-
-                if (!$post || empty($post['published_at'])) {
-                    http_response_code(404);
-                    $renderer->render('pages/404', []);
-                    return;
-                }
-
-                $publishedTs = strtotime((string)$post['published_at']);
-
-                if ($publishedTs === false
-                    || date('Y', $publishedTs) !== $year
-                    || date('m', $publishedTs) !== $month
-                    || date('d', $publishedTs) !== $day) {
-                    http_response_code(404);
-                    $renderer->render('pages/404', []);
-                    return;
-                }
-
-                $target = ($prefix !== '' ? $prefix : '') . '/posts/' . rawurlencode((string)$post['slug']);
-
-                header('Location: ' . $target, true, 301);
-                exit;
-            });
-        }
-
         // Categories index
         $router->add('GET', $prefix . '/categories', function () use ($renderer, $config): void {
             $page       = PaginationHelper::currentPage();
