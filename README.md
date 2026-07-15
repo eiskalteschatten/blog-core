@@ -20,7 +20,8 @@ A reusable, dependency-light PHP library for building file-system-based blogs. P
   - [Build (or rebuild) the index](#build-or-rebuild-the-index)
   - [Process post images](#process-post-images-also-runs-automatically-as-part-of-build-index)
   - [Installing ext-imagick](#installing-ext-imagick)
-  - [Import from WordPress (one-time migration)](#import-from-wordpress-one-time-migration)
+  - [Import from WordPress via REST API (one-time migration)](#import-from-wordpress-via-rest-api-one-time-migration)
+  - [Import from WordPress via XML export (one-time migration)](#import-from-wordpress-via-xml-export-one-time-migration)
   - [Publish core assets](#publish-core-assets-also-runs-automatically-as-part-of-build-index)
   - [Start the development server](#start-the-development-server)
 - [Routing](#routing)
@@ -361,7 +362,7 @@ Verify installation on any platform:
 php -m | grep imagick
 ```
 
-### Import from WordPress (one-time migration)
+### Import from WordPress via REST API (one-time migration)
 
 Connects to the WordPress REST API (v2) and imports all posts and categories into the blog-core file structure.
 
@@ -405,6 +406,54 @@ composer process-images
 ```
 
 Requires `ext-curl` (available in most PHP installations).
+
+### Import from WordPress via XML export (one-time migration)
+
+Parses a WordPress WXR export file (`.xml`) and imports all posts, categories, tags, and comments into the blog-core file structure. No live WordPress site or credentials required.
+
+**What it does:**
+- Reads all `<wp:category>` nodes → writes one `categories/{slug}.json` per category
+- Reads all `<wp:tag>` nodes to build a tag name map
+- Reads all `<item wp:post_type="post">` nodes, including drafts
+- Writes `posts/YYYY/MM/{slug}/meta.json` + `posts/YYYY/MM/{slug}/post.md` for each post
+- Extracts approved comments (excluding pingbacks/trackbacks) → writes `posts/YYYY/MM/{slug}/comments.json`
+- Downloads featured and inline images to `getOriginalPostImagesDir()/YYYY/MM/{slug}/` so `process-images` can generate WebP versions
+- Inline image `src` attributes are rewritten to `/images/posts/{slug}/{basename}`
+- Strips WordPress-specific HTML cruft (block classes, poll blocks, `srcset`/`sizes`, etc.)
+- Skips already-imported posts and categories unless `--force` is passed
+- Pass `--skip-images` to import content only without downloading any images
+
+To generate an export file, go to **Tools → Export** in the WordPress admin and choose **All content**.
+
+```bash
+# directly
+php bin/import_wordpress_xml.php --file /path/to/export.xml
+
+# with verbose output
+php bin/import_wordpress_xml.php --file export.xml --verbose
+
+# import a single post by slug
+php bin/import_wordpress_xml.php --file export.xml --post my-post-slug
+
+# re-import (overwrite) already-imported content
+php bin/import_wordpress_xml.php --file export.xml --force
+
+# skip image downloading (content src attributes are left as original URLs)
+php bin/import_wordpress_xml.php --file export.xml --skip-images
+```
+
+**Comments** are written to `comments.json` alongside `meta.json` and `post.md`. Only approved, non-pingback/trackback comments are included. The file is not created if a post has no qualifying comments.
+
+**Drafts** are imported automatically. Posts with a `0000-00-00` publish date (unpublished drafts) are placed in a flat `posts/{slug}/` directory since no date is available.
+
+**After importing**, run `build-index` to populate the SQLite database and `process-images` to generate WebP versions of the featured images:
+
+```bash
+composer build-index
+composer process-images
+```
+
+Requires `ext-curl` for image downloading (skipped when `--skip-images` is passed).
 
 ### Publish core assets (also runs automatically as part of `build-index`)
 
