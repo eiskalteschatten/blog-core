@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace BlogCore\Commands;
 
 use BlogCore\Core\Config;
+use FilesystemIterator;
 use Imagick;
 use ImagickException;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
 
 class ProcessImagesCommand
@@ -28,7 +31,7 @@ class ProcessImagesCommand
     /**
      * Process all post images using the Imagick PHP extension.
      *
-     * For each post directory, finds all supported image files, resizes them to
+      * For each post directory (discovered recursively), finds all supported image files, resizes them to
      * each width defined in Config::getImageSizes(), converts to WebP, and writes
      * the results to public/images/posts/{slug}/{filename}-{width}.webp.
      *
@@ -59,17 +62,8 @@ class ProcessImagesCommand
         $totalProcessed = 0;
         $totalSkipped   = 0;
 
-        foreach (new \DirectoryIterator($postsDir) as $entry) {
-            if ($entry->isDot() || !$entry->isDir()) {
-                continue;
-            }
-
-            $postDir  = $entry->getPathname();
+        foreach (static::findPostDirectories($postsDir) as $postDir) {
             $metaPath = $postDir . '/meta.json';
-
-            if (!file_exists($metaPath)) {
-                continue;
-            }
 
             try {
                 $meta = json_decode(file_get_contents($metaPath), true, 512, JSON_THROW_ON_ERROR);
@@ -77,7 +71,7 @@ class ProcessImagesCommand
                 continue;
             }
 
-            $slug   = $meta['slug'] ?? $entry->getFilename();
+            $slug   = $meta['slug'] ?? basename($postDir);
             $images = static::findImages($postDir);
 
             if (empty($images)) {
@@ -148,6 +142,40 @@ class ProcessImagesCommand
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Find all post directories recursively. A post directory is any directory
+     * containing a meta.json file.
+     */
+    private static function findPostDirectories(string $postsDir): array
+    {
+        $directories = [];
+
+        if (!is_dir($postsDir)) {
+            return $directories;
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($postsDir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $entry) {
+            if (!$entry->isDir()) {
+                continue;
+            }
+
+            $postDir = $entry->getPathname();
+
+            if (file_exists($postDir . '/meta.json')) {
+                $directories[] = $postDir;
+            }
+        }
+
+        sort($directories);
+
+        return $directories;
+    }
 
     /**
      * Find all supported image files directly inside $dir (non-recursive).

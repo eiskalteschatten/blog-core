@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace BlogCore\Commands;
 
 use BlogCore\Core\Config;
+use DateTimeImmutable;
 use RuntimeException;
 
 /**
@@ -17,7 +18,7 @@ use RuntimeException;
  *  - Already-imported posts are skipped unless --force is passed
  *  - WordPress HTML is sanitised (classes, poll blocks, cruft removed)
  *  - Inline images are downloaded and src attributes rewritten
- *  - Featured images are downloaded to both posts/{slug}/ (for process-images
+ *  - Featured images are downloaded to posts/YYYY/MM/{slug}/ (for process-images
  *    WebP conversion) and public/images/posts/{slug}/ (for immediate access)
  *  - Uses the REST API _fields param to fetch only required data
  */
@@ -221,7 +222,7 @@ class ImportWordPressCommand
         ?string $auth = null
     ): void {
         $slug     = $post['slug'];
-        $postDir  = $postsDir . '/' . $slug;
+        $postDir  = self::resolvePostDir($postsDir, $slug, (string)($post['date'] ?? ''));
         $metaFile = $postDir . '/meta.json';
         $mdFile   = $postDir . '/post.md';
 
@@ -250,7 +251,7 @@ class ImportWordPressCommand
             array_map(fn($id) => $categoryMap[(int)$id] ?? null, (array)($post['categories'] ?? []))
         ));
 
-        // Featured image — downloaded to posts/{slug}/ so process-images can generate WebP versions
+        // Featured image — downloaded to posts/YYYY/MM/{slug}/ so process-images can generate WebP versions
         $featuredImagePath = null;
         $featuredMediaId   = (int)($post['featured_media'] ?? 0);
 
@@ -260,7 +261,7 @@ class ImportWordPressCommand
             );
         }
 
-        // Content HTML — clean WordPress markup, download inline images to posts/{slug}/
+        // Content HTML — clean WordPress markup, download inline images to posts/YYYY/MM/{slug}/
         // and rewrite their srcs to /images/posts/{slug}/{basename}
         $html = self::cleanHtml($post['content']['rendered'] ?? '');
         $html = self::downloadInlineImages($html, $slug, $postDir, $verbose, $auth);
@@ -296,7 +297,7 @@ class ImportWordPressCommand
 
     /**
      * Fetch the featured image for a post and download it to the post source
-     * directory (posts/{slug}/) so process-images can generate WebP versions.
+        * directory (posts/YYYY/MM/{slug}/) so process-images can generate WebP versions.
      * Returns the expected public URL path that process-images will serve.
      */
     private static function importFeaturedImage(
@@ -328,7 +329,7 @@ class ImportWordPressCommand
     }
 
     /**
-     * Find all <img> tags in the HTML, download each image to posts/{slug}/
+     * Find all <img> tags in the HTML, download each image to posts/YYYY/MM/{slug}/
      * (where process-images will pick it up), and rewrite the src to
      * /images/posts/{slug}/{basename} (where process-images will publish it).
      */
@@ -624,6 +625,45 @@ class ImportWordPressCommand
         }
 
         return null;
+    }
+
+    /**
+     * Resolve the on-disk post directory path.
+     *
+     * New imports are written to posts/YYYY/MM/{slug}. If a legacy flat
+     * directory (posts/{slug}) already exists, keep using it to avoid creating
+     * duplicate post directories during migration.
+     */
+    private static function resolvePostDir(string $postsDir, string $slug, string $publishedAt): string
+    {
+        $legacyDir = $postsDir . '/' . $slug;
+
+        if (is_dir($legacyDir)) {
+            return $legacyDir;
+        }
+
+        $dt = self::parseWpDate($publishedAt);
+
+        if ($dt === null) {
+            return $legacyDir;
+        }
+
+        return sprintf('%s/%s/%s/%s', $postsDir, $dt->format('Y'), $dt->format('m'), $slug);
+    }
+
+    private static function parseWpDate(string $value): ?DateTimeImmutable
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return new DateTimeImmutable($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private static function decodeEntities(string $text): string

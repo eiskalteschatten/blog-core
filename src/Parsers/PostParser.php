@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace BlogCore\Parsers;
 
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
 
 class PostParser
@@ -20,16 +23,30 @@ class PostParser
 
         $posts = [];
 
-        foreach (new \DirectoryIterator($postsDir) as $entry) {
-            if ($entry->isDot() || !$entry->isDir()) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($postsDir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $entry) {
+            if (!$entry->isDir()) {
+                continue;
+            }
+
+            $postDir  = $entry->getPathname();
+            $metaPath = $postDir . '/meta.json';
+            $mdPath   = $postDir . '/post.md';
+
+            // A directory is considered a post directory only if it has both files.
+            if (!file_exists($metaPath) || !file_exists($mdPath)) {
                 continue;
             }
 
             try {
-                $posts[] = self::parseOne($entry->getPathname());
+                $posts[] = self::parseOne($postDir);
             } catch (RuntimeException $e) {
                 // Log and skip malformed post directories
-                fwrite(STDERR, "[PostParser] Skipping {$entry->getFilename()}: {$e->getMessage()}\n");
+                fwrite(STDERR, "[PostParser] Skipping {$postDir}: {$e->getMessage()}\n");
             }
         }
 

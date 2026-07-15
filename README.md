@@ -154,14 +154,19 @@ BuildIndexCommand::run(new BlogConfig(), $argv);
 
 ### Posts
 
-Each post lives in its own subdirectory under `posts/`:
+Each post lives in its own subdirectory under `posts/`.
+For large archives, the recommended layout is year/month buckets:
 
 ```
 posts/
-└── my-first-post/
-    ├── meta.json
-    └── post.md
+└── 2026/
+    └── 06/
+        └── my-first-post/
+            ├── meta.json
+            └── post.md
 ```
+
+`blog-core` scans recursively, so legacy flat directories like `posts/my-first-post/` also continue to work.
 
 **`meta.json`**
 
@@ -360,8 +365,8 @@ Connects to the WordPress REST API (v2) and imports all posts and categories int
 - Fetches all categories → writes one `categories/{slug}.json` per category
 - Batch-fetches all tags up-front (no per-post tag API calls)
 - Fetches all published posts; also fetches draft posts when `--auth` is supplied
-- Writes `posts/{slug}/meta.json` + `posts/{slug}/post.md` for each post
-- Downloads all images (featured and inline content) to `posts/{slug}/` so `process-images` can generate WebP versions
+- Writes `posts/YYYY/MM/{slug}/meta.json` + `posts/YYYY/MM/{slug}/post.md` for each post
+- Downloads all images (featured and inline content) to `posts/YYYY/MM/{slug}/` so `process-images` can generate WebP versions
 - Inline image `src` attributes are rewritten to `/images/posts/{slug}/{basename}`
 - Strips WordPress-specific HTML cruft (block classes, poll blocks, `srcset`/`sizes`, etc.)
 - Skips already-imported posts and categories unless `--force` is passed

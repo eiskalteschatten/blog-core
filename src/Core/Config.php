@@ -18,8 +18,8 @@ abstract class Config
     abstract public function getSiteUrl(): string;
 
     /**
-     * Absolute path to the directory containing post sub-directories.
-     * Each sub-directory must contain post.md and meta.json.
+     * Absolute path to the directory containing post directories.
+     * Post directories are discovered recursively and must contain post.md and meta.json.
      */
     abstract public function getPostsDir(): string;
 
