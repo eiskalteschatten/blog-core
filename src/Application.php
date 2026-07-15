@@ -114,11 +114,13 @@ class Application
 
             $categories = Post::categories((int)$post['id']);
             $tags       = Post::tags((int)$post['id']);
+            $comments   = Post::comments((int)$post['id']);
 
             $renderer->render('pages/posts/single', [
                 'post'       => $post,
                 'categories' => $categories,
                 'tags'       => $tags,
+                'comments'   => $comments,
             ]);
         });
 
