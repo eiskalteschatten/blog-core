@@ -9,12 +9,13 @@ use DateTimeImmutable;
 use RuntimeException;
 
 /**
- * Imports posts and categories from a WordPress site into the blog-core
+ * Imports posts, categories, and approved comments from a WordPress site into the blog-core
  * file structure using the WordPress REST API (v2).
  *
  * Improvements over a typical WordPress export:
  *  - Tags are batch-fetched up-front (no N+1 API calls)
  *  - Posts can be filtered to a single slug with --post
+ *  - Approved comments are imported to posts/.../comments.json
  *  - Already-imported posts are skipped unless --force is passed
  *  - WordPress HTML is sanitised (classes, poll blocks, cruft removed)
  *  - Inline images are downloaded and src attributes rewritten
@@ -293,12 +294,69 @@ class ImportWordPressCommand
         // Write post.md — clean HTML is stored directly; Parsedown renders it as-is
         file_put_contents($mdFile, $html . "\n");
 
+        // Write comments.json (only if there are comments)
+        $comments = self::fetchPostComments($apiBase, (int)($post['id'] ?? 0), $auth);
+
+        if (!empty($comments)) {
+            file_put_contents(
+                $postDir . '/comments.json',
+                json_encode($comments, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            );
+        }
+
         self::log($verbose, sprintf(
-            '  Post: %s (%s)%s',
+            '  Post: %s (%s)%s%s',
             $title,
             $slug,
-            $isDraft ? ' [draft]' : ''
+            $isDraft ? ' [draft]' : '',
+            !empty($comments) ? sprintf(' [%d comment(s)]', count($comments)) : ''
         ));
+    }
+
+    /**
+     * Fetch approved comments for a WordPress post and normalize them to the
+     * same structure as ImportWordPressXmlCommand::extractComments().
+     */
+    private static function fetchPostComments(string $apiBase, int $postId, ?string $auth = null): array
+    {
+        if ($postId <= 0) {
+            return [];
+        }
+
+        $fields = 'id,parent,author_name,author_url,date_gmt,content,type,status';
+        $endpoint = sprintf(
+            '%s/comments?post=%d&per_page=100&status=approve&orderby=date_gmt&order=asc&_fields=%s',
+            $apiBase,
+            $postId,
+            $fields
+        );
+
+        $wpComments = self::fetchAllPaged($endpoint, $auth);
+        $comments = [];
+
+        foreach ($wpComments as $comment) {
+            $type = (string)($comment['type'] ?? '');
+
+            // Skip pingbacks and trackbacks
+            if (in_array($type, ['pingback', 'trackback'], true)) {
+                continue;
+            }
+
+            $contentHtml = (string)($comment['content']['rendered'] ?? '');
+
+            $comments[] = [
+                'id'        => (int)($comment['id'] ?? 0),
+                'parentId'  => (int)($comment['parent'] ?? 0) ?: null,
+                'author'    => self::decodeEntities((string)($comment['author_name'] ?? '')),
+                'authorUrl' => ($comment['author_url'] ?? '') !== '' ? (string)$comment['author_url'] : null,
+                'date'      => ($comment['date_gmt'] ?? '') !== '' ? (string)$comment['date_gmt'] : null,
+                'content'   => trim(self::decodeEntities(strip_tags($contentHtml))),
+            ];
+        }
+
+        usort($comments, fn($a, $b) => strcmp((string)$a['date'], (string)$b['date']));
+
+        return $comments;
     }
 
     /**
