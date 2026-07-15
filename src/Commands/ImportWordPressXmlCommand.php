@@ -515,6 +515,10 @@ class ImportWordPressXmlCommand
             return '';
         }
 
+        // Strip WordPress block editor comments (<!-- wp:tag ... --> / <!-- /wp:tag -->)
+        // These are not parseable by DOMDocument and would pass through unchanged.
+        $html = preg_replace('/<!--\s*\/?wp:[^>]*-->/s', '', $html) ?? $html;
+
         $dom = new DOMDocument('1.0', 'UTF-8');
         @$dom->loadHTML(
             '<html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>',
@@ -582,7 +586,7 @@ class ImportWordPressXmlCommand
             $output .= $dom->saveHTML($child);
         }
 
-        return trim(preg_replace('/\n{3,}/', "\n\n", $output));
+        return trim(preg_replace(['/^[ \t]+$/m', '/\n{2,}/'], ['', "\n\n"], $output));
     }
 
     // -------------------------------------------------------------------------
