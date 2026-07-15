@@ -223,8 +223,9 @@ class ImportWordPressCommand
         bool    $verbose,
         ?string $auth = null
     ): void {
-        $slug     = $post['slug'];
-        $postDir  = self::resolvePostDir($postsDir, $slug, (string)($post['date'] ?? ''));
+        $slug    = $post['slug'];
+        $isDraft = ($post['status'] ?? 'publish') !== 'publish';
+        $postDir  = self::resolvePostDir($postsDir, $slug, (string)($post['date'] ?? ''), $isDraft);
         $imageDir = self::resolveImageDir($postsDir, $postDir, $sourceImagesBase);
         $metaFile = $postDir . '/meta.json';
         $mdFile   = $postDir . '/post.md';
@@ -246,8 +247,6 @@ class ImportWordPressCommand
         $excerpt = trim(preg_replace('/\s+/', ' ', self::decodeEntities(
             strip_tags($post['excerpt']['rendered'] ?? '')
         )));
-        $isDraft = ($post['status'] ?? 'publish') !== 'publish';
-
         // Tags
         $tags = array_values(array_filter(
             array_map(fn($id) => $tagMap[(int)$id] ?? null, (array)($post['tags'] ?? []))
@@ -643,18 +642,24 @@ class ImportWordPressCommand
      * directory (posts/{slug}) already exists, keep using it to avoid creating
      * duplicate post directories during migration.
      */
-    private static function resolvePostDir(string $postsDir, string $slug, string $publishedAt): string
+    private static function resolvePostDir(string $postsDir, string $slug, string $publishedAt, bool $isDraft): string
     {
+        // Keep an existing legacy flat directory to avoid creating duplicates
         $legacyDir = $postsDir . '/' . $slug;
 
         if (is_dir($legacyDir)) {
             return $legacyDir;
         }
 
+        if ($isDraft) {
+            return $postsDir . '/drafts/' . $slug;
+        }
+
         $dt = self::parseWpDate($publishedAt);
 
+        // Published posts with no parseable date fall back to the drafts folder
         if ($dt === null) {
-            return $legacyDir;
+            return $postsDir . '/drafts/' . $slug;
         }
 
         return sprintf('%s/%s/%s/%s', $postsDir, $dt->format('Y'), $dt->format('m'), $slug);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace BlogCore\Commands;
 
 use BlogCore\Core\Config;
+use BlogCore\Helpers\SlugHelper;
 use DateTimeImmutable;
 use DOMDocument;
 use DOMXPath;
@@ -249,7 +250,16 @@ class ImportWordPressXmlCommand
         bool     $skipImages,
         bool     $verbose
     ): void {
-        $slug        = self::nodeText($xpath, 'wp:post_name', $item);
+        $slug    = self::nodeText($xpath, 'wp:post_name', $item);
+        $status  = self::nodeText($xpath, 'wp:status', $item);
+        $isDraft = $status !== 'publish';
+
+        // Generate a slug from the title when WordPress has none (e.g. unsaved drafts)
+        if ($slug === '') {
+            $rawTitle = self::nodeText($xpath, 'title', $item);
+            $slug     = SlugHelper::make(self::decodeEntities($rawTitle));
+        }
+
         $publishedAt = self::nodeText($xpath, 'wp:post_date_gmt', $item);
 
         // Fall back to local date if GMT is missing
@@ -257,7 +267,7 @@ class ImportWordPressXmlCommand
             $publishedAt = self::nodeText($xpath, 'wp:post_date', $item);
         }
 
-        $postDir  = self::resolvePostDir($postsDir, $slug, $publishedAt);
+        $postDir  = self::resolvePostDir($postsDir, $slug, $publishedAt, $isDraft);
         $imageDir = self::resolveImageDir($postsDir, $postDir, $sourceImagesBase);
         $metaFile = $postDir . '/meta.json';
         $mdFile   = $postDir . '/post.md';
@@ -271,9 +281,7 @@ class ImportWordPressXmlCommand
             throw new RuntimeException("Could not create post directory: {$postDir}");
         }
 
-        $status    = self::nodeText($xpath, 'wp:status', $item);
-        $isDraft   = $status !== 'publish';
-        $title     = self::decodeEntities(self::nodeText($xpath, 'title', $item));
+        $title   = self::decodeEntities(self::nodeText($xpath, 'title', $item));
         $rawExcerpt = self::nodeText($xpath, 'excerpt:encoded', $item);
         $excerpt   = trim(preg_replace('/\s+/', ' ', self::decodeEntities(strip_tags($rawExcerpt))));
         $rawHtml   = self::nodeText($xpath, 'content:encoded', $item);
@@ -683,18 +691,24 @@ class ImportWordPressXmlCommand
      * New imports go to posts/YYYY/MM/{slug}. Falls back to posts/{slug} if the
      * date cannot be parsed (e.g. drafts with a 0000-00-00 date).
      */
-    private static function resolvePostDir(string $postsDir, string $slug, string $publishedAt): string
+    private static function resolvePostDir(string $postsDir, string $slug, string $publishedAt, bool $isDraft): string
     {
+        // Keep an existing legacy flat directory to avoid creating duplicates
         $legacyDir = $postsDir . '/' . $slug;
 
         if (is_dir($legacyDir)) {
             return $legacyDir;
         }
 
+        if ($isDraft) {
+            return $postsDir . '/drafts/' . $slug;
+        }
+
         $dt = self::parseWpDate($publishedAt);
 
+        // Published posts with no parseable date fall back to the drafts folder
         if ($dt === null) {
-            return $legacyDir;
+            return $postsDir . '/drafts/' . $slug;
         }
 
         return sprintf('%s/%s/%s/%s', $postsDir, $dt->format('Y'), $dt->format('m'), $slug);
