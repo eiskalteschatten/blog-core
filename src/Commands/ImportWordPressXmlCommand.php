@@ -613,7 +613,6 @@ class ImportWordPressXmlCommand
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno    = curl_errno($ch);
 
-        curl_close($ch);
         fclose($fh);
 
         if ($errno !== 0 || $httpCode !== 200) {
