@@ -88,6 +88,7 @@ class PostParser
 
         $markdown    = file_get_contents($mdPath);
         $contentHtml = MarkdownParser::toHtml($markdown);
+        $comments    = self::parseComments($dir);
 
         return [
             'title'        => (string)$meta['title'],
@@ -100,6 +101,60 @@ class PostParser
             'published_at' => isset($meta['publishedAt']) ? (string)$meta['publishedAt'] : null,
             'tags'         => array_values(array_filter(array_map('strval', (array)($meta['tags'] ?? [])))),
             'categories'   => array_values(array_filter(array_map('strval', (array)($meta['categories'] ?? [])))),
+            'comments'     => $comments,
         ];
+    }
+
+    /**
+     * Parse optional comments.json in a post directory.
+     * Returns normalized comment records; malformed entries are skipped.
+     */
+    private static function parseComments(string $dir): array
+    {
+        $commentsPath = $dir . '/comments.json';
+
+        if (!file_exists($commentsPath)) {
+            return [];
+        }
+
+        try {
+            $data = json_decode(file_get_contents($commentsPath), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "[PostParser] Invalid comments.json in {$dir}: {$e->getMessage()}\n");
+            return [];
+        }
+
+        if (!is_array($data)) {
+            fwrite(STDERR, "[PostParser] Invalid comments.json in {$dir}: expected a JSON array\n");
+            return [];
+        }
+
+        $comments = [];
+
+        foreach ($data as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $id = (int)($row['id'] ?? 0);
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            $comments[] = [
+                'id'              => $id,
+                'parentId'        => isset($row['parentId']) ? (int)$row['parentId'] : null,
+                'parentCommentId' => isset($row['parentCommentId'])
+                    ? (int)$row['parentCommentId']
+                    : (isset($row['parent_comment_id']) ? (int)$row['parent_comment_id'] : null),
+                'author'          => (string)($row['author'] ?? ''),
+                'authorUrl'       => isset($row['authorUrl']) && $row['authorUrl'] !== '' ? (string)$row['authorUrl'] : null,
+                'date'            => isset($row['date']) && $row['date'] !== '' ? (string)$row['date'] : null,
+                'content'         => (string)($row['content'] ?? ''),
+            ];
+        }
+
+        return $comments;
     }
 }

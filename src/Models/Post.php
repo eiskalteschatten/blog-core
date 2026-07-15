@@ -6,6 +6,7 @@ namespace BlogCore\Models;
 
 use BlogCore\Core\Model;
 use BlogCore\Core\QueryBuilder;
+
 class Post extends Model
 {
     protected static string $table = 'posts';
@@ -76,5 +77,11 @@ class Post extends Model
             ->join('post_tag_mapper', 'post_tag_mapper.tag_id = tags.id')
             ->where('post_tag_mapper.post_id', $postId)
             ->get();
+    }
+
+    /** Return all comments linked to a post (oldest first). */
+    public static function comments(int $postId): array
+    {
+        return Comment::forPost($postId)->get();
     }
 }

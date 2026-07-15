@@ -69,5 +69,42 @@ class SchemaManager
                 FOREIGN KEY (tag_id)  REFERENCES tags(id)  ON DELETE CASCADE
             );
         ");
+
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS comments (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id              INTEGER NOT NULL,
+                wp_comment_id        INTEGER NOT NULL,
+                parent_wp_comment_id INTEGER,
+                parent_comment_id    INTEGER,
+                author               TEXT    NOT NULL,
+                author_url           TEXT,
+                comment_date         TEXT,
+                content              TEXT    NOT NULL,
+                created_at           TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at           TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (post_id, wp_comment_id),
+                FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+            );
+        ");
+
+        // Backward-compatible migration for databases created before
+        // parent_comment_id existed.
+        $commentCols = $db->query('PRAGMA table_info(comments)')->fetchAll();
+        $hasParentCommentId = false;
+
+        foreach ($commentCols as $col) {
+            if (($col['name'] ?? null) === 'parent_comment_id') {
+                $hasParentCommentId = true;
+                break;
+            }
+        }
+
+        if (!$hasParentCommentId) {
+            $db->exec('ALTER TABLE comments ADD COLUMN parent_comment_id INTEGER');
+        }
+
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments (post_id)');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_comments_parent_comment_id ON comments (parent_comment_id)');
     }
 }

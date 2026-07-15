@@ -8,6 +8,7 @@ use BlogCore\Core\Config;
 use BlogCore\Core\Database;
 use BlogCore\Core\SchemaManager;
 use BlogCore\Models\Category;
+use BlogCore\Models\Comment;
 use BlogCore\Models\Post;
 use BlogCore\Models\PostCategoryMapper;
 use BlogCore\Models\PostTagMapper;
@@ -76,6 +77,7 @@ class IndexBuilder
             // Re-link categories and tags from scratch on every index run
             PostCategoryMapper::unlinkPost($postId);
             PostTagMapper::unlinkPost($postId);
+            Comment::unlinkPost($postId);
 
             // Link categories
             foreach ($data['categories'] as $stringId) {
@@ -96,8 +98,27 @@ class IndexBuilder
                 PostTagMapper::link($postId, $tagId);
             }
 
+            // Re-link comments from comments.json
+            foreach ((array)($data['comments'] ?? []) as $comment) {
+                Comment::upsertFromData([
+                    'post_id'           => $postId,
+                    'comment_id'        => (int)($comment['id'] ?? 0),
+                    'parent_id'         => isset($comment['parentId']) ? (int)$comment['parentId'] : null,
+                    'parent_comment_id' => isset($comment['parentCommentId']) ? (int)$comment['parentCommentId'] : null,
+                    'author'            => (string)($comment['author'] ?? ''),
+                    'author_url'        => isset($comment['authorUrl']) ? (string)$comment['authorUrl'] : null,
+                    'comment_date'      => isset($comment['date']) ? (string)$comment['date'] : null,
+                    'content'           => (string)($comment['content'] ?? ''),
+                ]);
+            }
+
+            // Resolve parent links after all comments are inserted for this post.
+            Comment::resolveParentLinksForPost($postId);
+
             $draft = $data['is_draft'] ? ' [draft]' : '';
-            $this->log($verbose, "  Post: {$data['title']} ({$data['slug']}){$draft}");
+            $commentsCount = count((array)($data['comments'] ?? []));
+            $commentsLabel = $commentsCount > 0 ? " [{$commentsCount} comment(s)]" : '';
+            $this->log($verbose, "  Post: {$data['title']} ({$data['slug']}){$draft}{$commentsLabel}");
         }
     }
 
