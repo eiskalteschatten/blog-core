@@ -10,6 +10,7 @@ use BlogCore\Core\Renderer;
 use BlogCore\Core\Router;
 use BlogCore\Core\SchemaManager;
 use BlogCore\Helpers\FeedHelper;
+use BlogCore\Helpers\CsrfHelper;
 use BlogCore\Helpers\LocalCommentStore;
 use BlogCore\Helpers\PaginationHelper;
 use BlogCore\Helpers\SitemapHelper;
@@ -23,6 +24,8 @@ class Application
     private Config   $config;
     private Router   $router;
     private Renderer $renderer;
+
+    private const COMMENTS_FORM_KEY = 'comments';
 
     public function __construct(Config $config)
     {
@@ -117,12 +120,14 @@ class Application
             $categories = Post::categories((int)$post['id']);
             $tags       = Post::tags((int)$post['id']);
             $comments   = Post::comments((int)$post['id']);
+            $csrfToken  = CsrfHelper::token(self::COMMENTS_FORM_KEY);
 
             $renderer->render('pages/posts/single', [
                 'post'       => $post,
                 'categories' => $categories,
                 'tags'       => $tags,
                 'comments'   => $comments,
+                'commentCsrfToken' => $csrfToken,
             ]);
         });
 
@@ -136,6 +141,30 @@ class Application
             if (!$post) {
                 http_response_code(404);
                 $renderer->render('pages/404', []);
+                return;
+            }
+
+            if (!CsrfHelper::validate(self::COMMENTS_FORM_KEY, (string)($_POST['_csrf'] ?? ''))) {
+                http_response_code(422);
+
+                $categories = Post::categories((int)$post['id']);
+                $tags       = Post::tags((int)$post['id']);
+                $comments   = Post::comments((int)$post['id']);
+
+                $renderer->render('pages/posts/single', [
+                    'post'              => $post,
+                    'categories'        => $categories,
+                    'tags'              => $tags,
+                    'comments'          => $comments,
+                    'commentCsrfToken'  => CsrfHelper::token(self::COMMENTS_FORM_KEY),
+                    'commentFormErrors' => ['Your session expired. Please refresh the page and try again.'],
+                    'commentFormOld'    => [
+                        'author'     => trim((string)($_POST['author'] ?? '')),
+                        'author_url' => trim((string)($_POST['author_url'] ?? '')),
+                        'content'    => trim((string)($_POST['content'] ?? '')),
+                    ],
+                ]);
+
                 return;
             }
 
@@ -177,6 +206,7 @@ class Application
                     'categories'       => $categories,
                     'tags'             => $tags,
                     'comments'         => $comments,
+                    'commentCsrfToken' => CsrfHelper::token(self::COMMENTS_FORM_KEY),
                     'commentFormErrors'=> $errors,
                     'commentFormOld'   => [
                         'author'     => $author,
@@ -207,6 +237,7 @@ class Application
                     'categories'       => $categories,
                     'tags'             => $tags,
                     'comments'         => $comments,
+                    'commentCsrfToken' => CsrfHelper::token(self::COMMENTS_FORM_KEY),
                     'commentFormErrors'=> ['Could not save your comment right now. Please try again.'],
                     'commentFormOld'   => [
                         'author'     => $author,
@@ -349,4 +380,5 @@ class Application
             $renderer->xml(SitemapHelper::generate($config));
         });
     }
+
 }
