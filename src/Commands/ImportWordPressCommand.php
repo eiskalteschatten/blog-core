@@ -294,14 +294,13 @@ class ImportWordPressCommand
         // Write post.md — clean HTML is stored directly; Parsedown renders it as-is
         file_put_contents($mdFile, $html . "\n");
 
-        // Write comments.json (only if there are comments)
-        $comments = self::fetchPostComments($apiBase, (int)($post['id'] ?? 0), $auth);
+        // Merge imported comments with existing comments.json to preserve
+        // user-created comments in the same file.
+        $importedComments = self::fetchPostComments($apiBase, (int)($post['id'] ?? 0), $auth);
+        $comments = self::mergeComments($postDir . '/comments.json', $importedComments);
 
         if (!empty($comments)) {
-            file_put_contents(
-                $postDir . '/comments.json',
-                json_encode($comments, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            );
+            self::writeCommentsFile($postDir . '/comments.json', $comments);
         }
 
         self::log($verbose, sprintf(
@@ -357,6 +356,85 @@ class ImportWordPressCommand
         usort($comments, fn($a, $b) => strcmp((string)$a['date'], (string)$b['date']));
 
         return $comments;
+    }
+
+    /**
+     * Merge imported comments with comments already on disk.
+     * Existing comments with IDs that are absent in the import are preserved.
+     * Imported rows overwrite existing rows for the same ID.
+     *
+     * @param array<int,array<string,mixed>> $importedComments
+     * @return array<int,array<string,mixed>>
+     */
+    private static function mergeComments(string $commentsPath, array $importedComments): array
+    {
+        $existing = self::readCommentsFile($commentsPath);
+        $byId = [];
+
+        foreach ($existing as $comment) {
+            $id = (int)($comment['id'] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $comment;
+            }
+        }
+
+        foreach ($importedComments as $comment) {
+            $id = (int)($comment['id'] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $comment;
+            }
+        }
+
+        $merged = array_values($byId);
+        usort($merged, fn($a, $b) => strcmp((string)($a['date'] ?? ''), (string)($b['date'] ?? '')));
+
+        return $merged;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private static function readCommentsFile(string $commentsPath): array
+    {
+        if (!file_exists($commentsPath)) {
+            return [];
+        }
+
+        $raw = file_get_contents($commentsPath);
+        if ($raw === false || trim($raw) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        if (array_is_list($decoded)) {
+            return $decoded;
+        }
+
+        $comments = $decoded['comments'] ?? [];
+        return is_array($comments) ? $comments : [];
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $comments
+     */
+    private static function writeCommentsFile(string $commentsPath, array $comments): void
+    {
+        file_put_contents(
+            $commentsPath,
+            json_encode(
+                array_values($comments),
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            )
+        );
     }
 
     /**

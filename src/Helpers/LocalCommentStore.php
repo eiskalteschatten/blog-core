@@ -32,7 +32,7 @@ class LocalCommentStore
      */
     private static function appendToPostDir(string $postDir, array $comment): array
     {
-        $commentsPath = $postDir . '/comments-local.json';
+        $commentsPath = $postDir . '/comments.json';
 
         $lockHandle = self::openLockHandle($commentsPath);
 
@@ -45,10 +45,10 @@ class LocalCommentStore
                 throw new RuntimeException("Could not acquire comment lock for post directory: {$postDir}");
             }
 
-            $state = self::readState($commentsPath);
+            $comments = self::readComments($commentsPath);
 
             $newComment = [
-                'id'       => self::nextCommentId((array)($state['comments'] ?? [])),
+                'id'       => self::nextCommentId($comments),
                 'parentId' => isset($comment['parentId']) ? (int)$comment['parentId'] : null,
                 'author'   => (string)($comment['author'] ?? 'Anonymous'),
                 'authorUrl'=> isset($comment['authorUrl']) && (string)$comment['authorUrl'] !== ''
@@ -58,10 +58,9 @@ class LocalCommentStore
                 'content'  => (string)($comment['content'] ?? ''),
             ];
 
-            $state['revision'] = (int)($state['revision'] ?? 0) + 1;
-            $state['comments'][] = $newComment;
+            $comments[] = $newComment;
 
-            self::writeStateAtomically($commentsPath, $state);
+            self::writeCommentsAtomically($commentsPath, $comments);
 
             flock($lockHandle, LOCK_UN);
 
@@ -88,36 +87,32 @@ class LocalCommentStore
     }
 
     /**
-     * @return array{revision:int,comments:array<int,array<string,mixed>>}
+     * @return array<int,array<string,mixed>>
      */
-    private static function readState(string $commentsPath): array
+    private static function readComments(string $commentsPath): array
     {
         if (!file_exists($commentsPath)) {
-            return ['revision' => 0, 'comments' => []];
+            return [];
         }
 
         $raw = file_get_contents($commentsPath);
 
         if ($raw === false) {
-            throw new RuntimeException("Could not read local comments file: {$commentsPath}");
+            throw new RuntimeException("Could not read comments file: {$commentsPath}");
         }
 
         if (trim($raw) === '') {
-            return ['revision' => 0, 'comments' => []];
+            return [];
         }
 
         $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
 
         if (!is_array($decoded)) {
-            throw new RuntimeException("Invalid local comments file format: {$commentsPath}");
+            throw new RuntimeException("Invalid comments file format: {$commentsPath}");
         }
 
-        // Backward compatibility: allow a raw array of comments.
         if (array_is_list($decoded)) {
-            return [
-                'revision' => 0,
-                'comments' => $decoded,
-            ];
+            return $decoded;
         }
 
         $comments = $decoded['comments'] ?? [];
@@ -126,10 +121,7 @@ class LocalCommentStore
             throw new RuntimeException("Invalid 'comments' payload in {$commentsPath}");
         }
 
-        return [
-            'revision' => (int)($decoded['revision'] ?? 0),
-            'comments' => $comments,
-        ];
+        return $comments;
     }
 
     /**
@@ -160,14 +152,14 @@ class LocalCommentStore
     }
 
     /**
-     * @param array{revision:int,comments:array<int,array<string,mixed>>} $state
+     * @param array<int,array<string,mixed>> $comments
      */
-    private static function writeStateAtomically(string $commentsPath, array $state): void
+    private static function writeCommentsAtomically(string $commentsPath, array $comments): void
     {
         $tmpPath = $commentsPath . '.tmp.' . bin2hex(random_bytes(6));
 
         $json = json_encode(
-            $state,
+            array_values($comments),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
         ) . "\n";
 

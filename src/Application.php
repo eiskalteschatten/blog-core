@@ -228,7 +228,7 @@ class Application
                     'content'      => (string)$storedComment['content'],
                 ]);
             } catch (\Throwable $e) {
-                // SQLite is a cache; comment source-of-truth is comments-local.json.
+                // SQLite is a cache; comment source-of-truth is comments.json.
             }
 
             $location = $prefix . '/posts/' . rawurlencode((string)$params['slug']) . '?comment=posted#comments';

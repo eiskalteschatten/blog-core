@@ -111,17 +111,7 @@ class PostParser
      */
     private static function parseComments(string $dir): array
     {
-        $comments = [];
-
-        foreach (self::readCommentsFile($dir . '/comments.json', 'comments.json') as $row) {
-            $comments[] = $row;
-        }
-
-        foreach (self::readCommentsFile($dir . '/comments-local.json', 'comments-local.json') as $row) {
-            $comments[] = $row;
-        }
-
-        return $comments;
+        return self::readCommentsFile($dir . '/comments.json', 'comments.json');
     }
 
     /**
