@@ -26,6 +26,7 @@ class Application
     private Renderer $renderer;
 
     private const COMMENTS_FORM_KEY = 'comments';
+    private const COMMENTS_MIN_SUBMIT_SECONDS = 3;
 
     public function __construct(Config $config)
     {
@@ -120,6 +121,7 @@ class Application
             $categories = Post::categories((int)$post['id']);
             $tags       = Post::tags((int)$post['id']);
             $comments   = Post::comments((int)$post['id']);
+            CsrfHelper::markRendered(self::COMMENTS_FORM_KEY);
             $csrfToken  = CsrfHelper::token(self::COMMENTS_FORM_KEY);
 
             $renderer->render('pages/posts/single', [
@@ -158,6 +160,30 @@ class Application
                     'comments'          => $comments,
                     'commentCsrfToken'  => CsrfHelper::token(self::COMMENTS_FORM_KEY),
                     'commentFormErrors' => ['Your session expired. Please refresh the page and try again.'],
+                    'commentFormOld'    => [
+                        'author'     => trim((string)($_POST['author'] ?? '')),
+                        'author_url' => trim((string)($_POST['author_url'] ?? '')),
+                        'content'    => trim((string)($_POST['content'] ?? '')),
+                    ],
+                ]);
+
+                return;
+            }
+
+            if (!CsrfHelper::meetsMinAge(self::COMMENTS_FORM_KEY, self::COMMENTS_MIN_SUBMIT_SECONDS)) {
+                http_response_code(422);
+
+                $categories = Post::categories((int)$post['id']);
+                $tags       = Post::tags((int)$post['id']);
+                $comments   = Post::comments((int)$post['id']);
+
+                $renderer->render('pages/posts/single', [
+                    'post'              => $post,
+                    'categories'        => $categories,
+                    'tags'              => $tags,
+                    'comments'          => $comments,
+                    'commentCsrfToken'  => CsrfHelper::token(self::COMMENTS_FORM_KEY),
+                    'commentFormErrors' => ['Please wait a few seconds before submitting your comment.'],
                     'commentFormOld'    => [
                         'author'     => trim((string)($_POST['author'] ?? '')),
                         'author_url' => trim((string)($_POST['author_url'] ?? '')),
