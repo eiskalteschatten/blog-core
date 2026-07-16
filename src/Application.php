@@ -10,9 +10,11 @@ use BlogCore\Core\Renderer;
 use BlogCore\Core\Router;
 use BlogCore\Core\SchemaManager;
 use BlogCore\Helpers\FeedHelper;
+use BlogCore\Helpers\LocalCommentStore;
 use BlogCore\Helpers\PaginationHelper;
 use BlogCore\Helpers\SitemapHelper;
 use BlogCore\Models\Category;
+use BlogCore\Models\Comment;
 use BlogCore\Models\Post;
 use BlogCore\Models\Tag;
 
@@ -122,6 +124,116 @@ class Application
                 'tags'       => $tags,
                 'comments'   => $comments,
             ]);
+        });
+
+        // Create comment
+        $router->add('POST', $prefix . '/posts/:slug/comments', function (array $params) use ($renderer, $config, $prefix): void {
+            $isDevServer = str_contains($_SERVER['SERVER_SOFTWARE'] ?? '', 'Development Server');
+            $post = $isDevServer
+                ? Post::findBySlug($params['slug'])
+                : Post::published()->where('slug', $params['slug'])->first();
+
+            if (!$post) {
+                http_response_code(404);
+                $renderer->render('pages/404', []);
+                return;
+            }
+
+            $author    = trim((string)($_POST['author'] ?? ''));
+            $authorUrl = trim((string)($_POST['author_url'] ?? ''));
+            $content   = trim((string)($_POST['content'] ?? ''));
+
+            $errors = [];
+
+            if ($author === '') {
+                $author = 'Anonymous';
+            }
+
+            if (mb_strlen($author) > 120) {
+                $errors[] = 'Author name must be 120 characters or fewer.';
+            }
+
+            if ($authorUrl !== '' && filter_var($authorUrl, FILTER_VALIDATE_URL) === false) {
+                $errors[] = 'Author URL must be a valid URL.';
+            }
+
+            if (mb_strlen($content) < 2) {
+                $errors[] = 'Comment content must be at least 2 characters.';
+            }
+
+            if (mb_strlen($content) > 10000) {
+                $errors[] = 'Comment content must be 10000 characters or fewer.';
+            }
+
+            if (!empty($errors)) {
+                http_response_code(422);
+
+                $categories = Post::categories((int)$post['id']);
+                $tags       = Post::tags((int)$post['id']);
+                $comments   = Post::comments((int)$post['id']);
+
+                $renderer->render('pages/posts/single', [
+                    'post'             => $post,
+                    'categories'       => $categories,
+                    'tags'             => $tags,
+                    'comments'         => $comments,
+                    'commentFormErrors'=> $errors,
+                    'commentFormOld'   => [
+                        'author'     => $author,
+                        'author_url' => $authorUrl,
+                        'content'    => $content,
+                    ],
+                ]);
+
+                return;
+            }
+
+            try {
+                $storedComment = LocalCommentStore::appendForPostSlug($config->getPostsDir(), (string)$params['slug'], [
+                    'author'    => $author,
+                    'authorUrl' => $authorUrl !== '' ? $authorUrl : null,
+                    'content'   => $content,
+                    'date'      => gmdate('Y-m-d H:i:s'),
+                ]);
+            } catch (\Throwable $e) {
+                http_response_code(500);
+
+                $categories = Post::categories((int)$post['id']);
+                $tags       = Post::tags((int)$post['id']);
+                $comments   = Post::comments((int)$post['id']);
+
+                $renderer->render('pages/posts/single', [
+                    'post'             => $post,
+                    'categories'       => $categories,
+                    'tags'             => $tags,
+                    'comments'         => $comments,
+                    'commentFormErrors'=> ['Could not save your comment right now. Please try again.'],
+                    'commentFormOld'   => [
+                        'author'     => $author,
+                        'author_url' => $authorUrl,
+                        'content'    => $content,
+                    ],
+                ]);
+                return;
+            }
+
+            try {
+                Comment::upsertFromData([
+                    'post_id'      => (int)$post['id'],
+                    'comment_id'   => (int)$storedComment['id'],
+                    'parent_id'    => null,
+                    'author'       => (string)$storedComment['author'],
+                    'author_url'   => isset($storedComment['authorUrl']) ? (string)$storedComment['authorUrl'] : null,
+                    'comment_date' => (string)$storedComment['date'],
+                    'content'      => (string)$storedComment['content'],
+                ]);
+            } catch (\Throwable $e) {
+                // SQLite is a cache; comment source-of-truth is comments-local.json.
+            }
+
+            $location = $prefix . '/posts/' . rawurlencode((string)$params['slug']) . '?comment=posted#comments';
+            header('Location: ' . $location, true, 303);
+            return;
         });
 
         // Categories index

@@ -111,21 +111,48 @@ class PostParser
      */
     private static function parseComments(string $dir): array
     {
-        $commentsPath = $dir . '/comments.json';
+        $comments = [];
 
-        if (!file_exists($commentsPath)) {
+        foreach (self::readCommentsFile($dir . '/comments.json', 'comments.json') as $row) {
+            $comments[] = $row;
+        }
+
+        foreach (self::readCommentsFile($dir . '/comments-local.json', 'comments-local.json') as $row) {
+            $comments[] = $row;
+        }
+
+        return $comments;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private static function readCommentsFile(string $path, string $label): array
+    {
+        $dir = dirname($path);
+
+        if (!file_exists($path)) {
             return [];
         }
 
         try {
-            $data = json_decode(file_get_contents($commentsPath), true, 512, JSON_THROW_ON_ERROR);
+            $data = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable $e) {
-            fwrite(STDERR, "[PostParser] Invalid comments.json in {$dir}: {$e->getMessage()}\n");
+            fwrite(STDERR, "[PostParser] Invalid {$label} in {$dir}: {$e->getMessage()}\n");
             return [];
         }
 
         if (!is_array($data)) {
-            fwrite(STDERR, "[PostParser] Invalid comments.json in {$dir}: expected a JSON array\n");
+            fwrite(STDERR, "[PostParser] Invalid {$label} in {$dir}: expected a JSON array or object\n");
+            return [];
+        }
+
+        if (!array_is_list($data)) {
+            $data = $data['comments'] ?? [];
+        }
+
+        if (!is_array($data)) {
+            fwrite(STDERR, "[PostParser] Invalid {$label} in {$dir}: expected 'comments' to be an array\n");
             return [];
         }
 
