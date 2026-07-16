@@ -168,6 +168,13 @@ class Application
                 return;
             }
 
+            // Honeypot trap: bots commonly fill hidden fields.
+            if (trim((string)($_POST['comment_hp'] ?? '')) !== '') {
+                $location = $prefix . '/posts/' . rawurlencode((string)$params['slug']) . '?comment=posted#comments';
+                header('Location: ' . $location, true, 303);
+                return;
+            }
+
             $author    = trim((string)($_POST['author'] ?? ''));
             $authorUrl = trim((string)($_POST['author_url'] ?? ''));
             $content   = trim((string)($_POST['content'] ?? ''));
